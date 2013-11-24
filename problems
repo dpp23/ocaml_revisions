@@ -1,0 +1,15 @@
+Problems & feautures yet to implement:
+
+-Revisions not actually isolated
+-Can read & write outside a fork
+-Not keeping track of the original value of the Isolated 
+-No use of the merge function (see above)
+-Still sequential
+-Move from two functors to just one?
+-Duplicates in the list of dirty IDs in the revisions, Use better data structure?
+
+
+
+(int, var, 'a) Map.t * int list -> isolated -> var -> (int, var, 'a) Map.t * int list
+t -> isolated -> var -> t
+
