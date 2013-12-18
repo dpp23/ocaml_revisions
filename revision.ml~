@@ -7,32 +7,32 @@ end
 
 module type Isolated = sig
   type t 
-  type value
+  type var
   val merge: t -> t -> t -> t
-  val create: value -> t
+  val create: var -> t
   val get_id: t -> int
-  val update: t -> value -> t
-  val read: t -> value
+  val update: t -> var -> t
+  val read: t -> var
 end
 
 module type Revision = sig
   type t
   type isolated
-  type value
+  type var
 
-  val create:  t -> value -> (t*isolated)
+  val create:  t -> var -> (t*isolated)
   val fork: t -> (t -> t) -> t
   val join: t -> t -> t
   val init: unit -> t
-  val write: t -> isolated -> value -> t
-  val read: t -> isolated -> value option
+  val write: t -> isolated -> var -> t
+  val read: t -> isolated -> var option
 
 end
 
 module Isolate(X:Isolatable) 
-      :(Isolated with type t = (int*X.t) and type value = X.t)  = struct
+      :(Isolated with type t = (int*X.t) and type var = X.t)  = struct
   type t = (int*X.t)
-  type value = X.t
+  type var = X.t
   let id = ref 0
   let merge a b c = let (id, a) = a and (_, b) = b and (_, c) = c in
                       let n = X.merge a b c in
@@ -46,10 +46,10 @@ module Isolate(X:Isolatable)
   
 end
 
-module Revise(X:Isolated) : (Revision with type value = X.value and type isolated = X.t) = struct
+module Revise(X:Isolated) : (Revision with type var = X.var and type isolated = X.t) = struct
   (** Contains a map and a list of writen Isolated **)
   type t = ((int, X.t, Int.comparator) Map.t) * int list 
-  type value = X.value
+  type var = X.var
   type isolated = X.t
 
   let create (parent, l) init = let isolated = X.create init in

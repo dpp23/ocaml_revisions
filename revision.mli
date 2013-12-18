@@ -7,29 +7,29 @@ end
 
 module type Isolated = sig
   type t 
-  type var
+  type value
   val merge: t -> t -> t -> t
-  val create: var -> t
+  val create: value -> t
   val get_id: t -> int
-  val update: t -> var -> t
-  val read: t -> var
+  val update: t -> value -> t
+  val read: t -> value
 end
 
 module type Revision = sig
   type t
   type isolated
-  type var
+  type value
 
-  val create:  t -> var -> (t*isolated)
+  val create:  t -> value -> (t*isolated)
   val fork: t -> (t -> t) -> t
   val join: t -> t -> t
   val init: unit -> t
-  val write: t -> isolated -> var -> t
-  val read: t -> isolated -> var option
+  val write: t -> isolated -> value -> t
+  val read: t -> isolated -> value option
 
 end
 
-module Revise(X:Isolated) : (Revision with type var = X.var and type isolated = X.t)
+module Revise(X:Isolated) : (Revision with type value = X.value and type isolated = X.t)
 
-module Isolate(X:Isolatable) :(Isolated with type t = (int*X.t) and type var = X.t)
+module Isolate(X:Isolatable) :(Isolated with type t = (int*X.t) and type value = X.t)
   
