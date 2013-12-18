@@ -9,7 +9,7 @@ module type Isolated = sig
   type t 
   type value
   val merge: t -> t -> t -> t
-  val create: value -> t
+  val create: value -> int -> t * int
   val get_id: t -> int
   val update: t -> value -> t
   val read: t -> value
