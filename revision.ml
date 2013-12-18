@@ -47,25 +47,36 @@ module Isolate(X:Isolatable)
 end
 
 module Revise(X:Isolated) : (Revision with type value = X.value and type isolated = X.t) = struct
-  (** Contains a map and a list of writen Isolated **)
-  type t = ((int, X.t, Int.comparator) Map.t) * int list 
+  (** Contains a map that represents the state of the revision and one that is the state of the mother revision and a list of writen Isolated **)
+  type t = ((int, X.t, Int.comparator) Map.t) * ((int, X.t, Int.comparator) Map.t) * int list 
   type value = X.value
   type isolated = X.t
 
-  let create (parent, l) init = let isolated = X.create init in
-                                               (((Map.add parent ~key:(X.get_id isolated) ~data:isolated), l) , isolated) 
+  let create (parent, _, l) init = let isolated = X.create init in 
+                                                    let k = (Map.add parent ~key:(X.get_id isolated) ~data:isolated) in
+                                                      ((k, k, l), isolated) 
 
   let fork a f = f a
-  let rec join (a, al) (b, bl) = match bl with
-                                [] -> (a, al)
+
+  let rec join (a, ap, al) (b, bp, bl) = match bl with
+                                [] -> (a, ap, al)
                                |x::xs -> let k = Map.find b x in
-                                             match k with
-                                              Some(y) -> join (Map.add a ~key:x ~data:y,(x::al)) (b, xs)
-                                              | None -> assert(false); join (a, al) (b,xs)
-  let write (t,l) iso v = (Map.add t ~key:(X.get_id iso) ~data:(X.update iso v), (X.get_id iso)::l)
-  let read (a, _) iso = match Map.find a (X.get_id iso) with
+                                           let kp = Map.find bp x in
+                                             let ka = Map.find a x in
+                                               match k with
+                                                 Some(y) -> begin match kp with
+                                                              Some(yp)-> begin match ka with
+                                                                         Some(ya)-> join (Map.add a ~key:x ~data:(X.merge yp ya y), ap, (x::al)) (b, bp, xs)
+                                                                         |None -> join (a, ap, al) (b, bp, xs)
+                                                                       end
+                                                              |None -> join (a, ap, al) (b, bp, xs)
+                                                            end
+                                                 | None -> join (a, ap, al) (b, bp, xs)
+
+  let write (t,p,l) iso v = (Map.add t ~key:(X.get_id iso) ~data:(X.update iso v), p, (X.get_id iso)::l)
+  let read (a,_, _) iso = match Map.find a (X.get_id iso) with
                               Some v -> Some (X.read v)
                              |None -> None
-  let init () = Map.empty ~comparator:Int.comparator, []
+  let init () = Map.empty ~comparator:Int.comparator, Map.empty ~comparator:Int.comparator, []
 
 end
