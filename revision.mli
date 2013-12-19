@@ -5,15 +5,6 @@ module type Isolatable = sig
   val merge: t -> t -> t -> t
 end
 
-module type Isolated = sig
-  type t 
-  type value
-  val merge: t -> t -> t -> t
-  val create: value -> int -> t * int
-  val get_id: t -> int
-  val update: t -> value -> t
-  val read: t -> value
-end
 
 module type Revision = sig
   type t
@@ -29,7 +20,7 @@ module type Revision = sig
 
 end
 
-module Revise(X:Isolated) : (Revision with type value = X.value and type isolated = X.t)
+module Make(X:Isolatable) : (Revision with type value = X.t and type isolated = int * X.t)
 
-module Isolate(X:Isolatable) :(Isolated with type t = (int*X.t) and type value = X.t)
+
   

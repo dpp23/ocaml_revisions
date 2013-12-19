@@ -5,15 +5,6 @@ module type Isolatable = sig
   val merge: t -> t -> t -> t
 end
 
-module type Isolated = sig
-  type t 
-  type value
-  val merge: t -> t -> t -> t
-  val create: value -> int -> t * int
-  val get_id: t -> int
-  val update: t -> value -> t
-  val read: t -> value
-end
 
 module type Revision = sig
   type t
@@ -29,30 +20,28 @@ module type Revision = sig
 
 end
 
-module Isolate(X:Isolatable) 
-      :(Isolated with type t = (int*X.t) and type value = X.t)  = struct
-  type t = (int*X.t)
-  type value = X.t
-  let merge a b c = let (id, a) = a and (_, b) = b and (_, c) = c in
-                      let n = X.merge a b c in
-                        (id, n) (**TODO: check IDs match or raise exception**)   
-  let create init seq = ((seq, init), seq + 1)
-  let get_id (id,_) = id
-  let update (id, _) new_v = (id, new_v)
-  let read (_, v) = v
+module Make(X:Isolatable) : (Revision with type value = X.t and type isolated = int * X.t) = struct
+  module Isolated = struct 
+    type t = (int*X.t)
+    type value = X.t
+    let merge a b c = let (id, a) = a and (_, b) = b and (_, c) = c in
+                        let n = X.merge a b c in
+                          (id, n) (**TODO: check IDs match or raise exception**)   
+    let create init seq = ((seq, init), seq + 1)
+    let get_id (id,_) = id
+    let update (id, _) new_v = (id, new_v)
+    let read (_, v) = v
+
+  end
   
-end
-
-module Revise(X:Isolated) : (Revision with type value = X.value and type isolated = X.t) = struct
-
   module WrittenSet = Set.Make(Int)
   (** Contains a map that represents the state of the revision and one that is the state of the mother revision and a list of writen Isolated **)
-  type t = ((int, X.t, Int.comparator) Map.t) * ((int, X.t, Int.comparator) Map.t) * WrittenSet.t * int 
-  type value = X.value
-  type isolated = X.t
+  type t = ((int, Isolated.t, Int.comparator) Map.t) * ((int, Isolated.t, Int.comparator) Map.t) * WrittenSet.t * int 
+  type value = X.t
+  type isolated = Isolated.t
 
-  let create (parent, _, l, s) init = let (isolated, seq) = X.create init s in 
-                                                    let k = (Map.add parent ~key:(X.get_id isolated) ~data:isolated) in
+  let create (parent, _, l, s) init = let (isolated, seq) = Isolated.create init s in 
+                                                    let k = (Map.add parent ~key:(Isolated.get_id isolated) ~data:isolated) in
                                                       ((k, k, l, seq), isolated) 
 
   let fork a f = f a
@@ -63,16 +52,16 @@ module Revise(X:Isolated) : (Revision with type value = X.value and type isolate
                                                       |x::xs -> let k = Map.find b x and kp = Map.find bp x and ka = Map.find a x in
                                                                    match (k, kp, ka) with
                                                                      (Some(y), Some(yp), Some(ya)) -> join_rec 
-                                                                      (Map.add a ~key:x ~data:(X.merge yp ya y), ap, WrittenSet.add al x, aseq) (b, bp, xs, bseq)
+                                                                      (Map.add a ~key:x ~data:(Isolated.merge yp ya y), ap, WrittenSet.add al x, aseq) (b, bp, xs, bseq)
                                                                      |_ -> join_rec (a, ap, al, aseq) (b, bp, xs, bseq)
                                                     in
                                                       join_rec (a, ap, al, aseq) (b, bp, wlist, bseq)
             
   
 
-  let write (t,p,l,s) iso v = (Map.add t ~key:(X.get_id iso) ~data:(X.update iso v), p, WrittenSet.add l (X.get_id iso), s)
-  let read (a,_, _, _) iso = match Map.find a (X.get_id iso) with
-                              Some v -> Some (X.read v)
+  let write (t,p,l,s) iso v = (Map.add t ~key:(Isolated.get_id iso) ~data:(Isolated.update iso v), p, WrittenSet.add l (Isolated.get_id iso), s)
+  let read (a,_, _, _) iso = match Map.find a (Isolated.get_id iso) with
+                              Some v -> Some (Isolated.read v)
                              |None -> None
   let init () = Map.empty ~comparator:Int.comparator, Map.empty ~comparator:Int.comparator, WrittenSet.empty, 0
 

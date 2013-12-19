@@ -1,13 +1,10 @@
 open Revision
 open Core.Std
 
-module IntIsolatable = Isolate(struct 
+module IntRevision = Make(struct 
                                       type t = int
                                       let merge a b c = b + c - a
                                end)
-
-module IntRevision = Revise(IntIsolatable)
-
 
 let () = 
   let r = IntRevision.init () in 
