@@ -44,8 +44,10 @@ module Isolate(X:Isolatable)
 end
 
 module Revise(X:Isolated) : (Revision with type value = X.value and type isolated = X.t) = struct
+
+  module WrittenSet = Set.Make(Int)
   (** Contains a map that represents the state of the revision and one that is the state of the mother revision and a list of writen Isolated **)
-  type t = ((int, X.t, Int.comparator) Map.t) * ((int, X.t, Int.comparator) Map.t) * int list * int 
+  type t = ((int, X.t, Int.comparator) Map.t) * ((int, X.t, Int.comparator) Map.t) * WrittenSet.t * int 
   type value = X.value
   type isolated = X.t
 
@@ -54,26 +56,24 @@ module Revise(X:Isolated) : (Revision with type value = X.value and type isolate
                                                       ((k, k, l, seq), isolated) 
 
   let fork a f = f a
+  
+  let join (a, ap, al, aseq) (b, bp, bl, bseq) = let wlist = WrittenSet.elements bl in
+                                                    let rec join_rec (a, ap, al, aseq) (b, bp, bl, bseq) = match bl with
+                                                      [] -> (a, ap, al, aseq)
+                                                      |x::xs -> let k = Map.find b x and kp = Map.find bp x and ka = Map.find a x in
+                                                                   match (k, kp, ka) with
+                                                                     (Some(y), Some(yp), Some(ya)) -> join_rec 
+                                                                      (Map.add a ~key:x ~data:(X.merge yp ya y), ap, WrittenSet.add al x, aseq) (b, bp, xs, bseq)
+                                                                     |_ -> join_rec (a, ap, al, aseq) (b, bp, xs, bseq)
+                                                    in
+                                                      join_rec (a, ap, al, aseq) (b, bp, wlist, bseq)
+            
+  
 
-  let rec join (a, ap, al, aseq) (b, bp, bl, bseq) = match bl with
-                                [] -> (a, ap, al, aseq)
-                               |x::xs -> let k = Map.find b x in
-                                           let kp = Map.find bp x in
-                                             let ka = Map.find a x in
-                                               match k with
-                                                 Some(y) -> begin match kp with
-                                                              Some(yp)-> begin match ka with
-                                                                         Some(ya)-> join (Map.add a ~key:x ~data:(X.merge yp ya y), ap, (x::al), aseq) (b, bp, xs, bseq)
-                                                                         |None -> join (a, ap, al, aseq) (b, bp, xs, bseq)
-                                                                       end
-                                                              |None -> join (a, ap, al, aseq) (b, bp, xs, bseq)
-                                                            end
-                                                 | None -> join (a, ap, al, aseq) (b, bp, xs, bseq)
-
-  let write (t,p,l,s) iso v = (Map.add t ~key:(X.get_id iso) ~data:(X.update iso v), p, (X.get_id iso)::l, s)
+  let write (t,p,l,s) iso v = (Map.add t ~key:(X.get_id iso) ~data:(X.update iso v), p, WrittenSet.add l (X.get_id iso), s)
   let read (a,_, _, _) iso = match Map.find a (X.get_id iso) with
                               Some v -> Some (X.read v)
                              |None -> None
-  let init () = Map.empty ~comparator:Int.comparator, Map.empty ~comparator:Int.comparator, [], 0
+  let init () = Map.empty ~comparator:Int.comparator, Map.empty ~comparator:Int.comparator, WrittenSet.empty, 0
 
 end
