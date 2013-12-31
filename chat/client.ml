@@ -1,20 +1,49 @@
 open Core.Std
 open Async.Std
+open Messages
 
-let listen (_,r,w) = print_string "Listening"; ignore (Reader.read_line r >>= (function
-                                         | `Eof -> print_string "cEOF"; return ()
-                                         | `Ok line -> print_string "cOK"; return (print_string line)));
-                 Reader.read_line (Lazy.force Reader.stdin) >>| function
-                                                                  | `Eof -> print_string "inEOF"; return ()
-                                                                  | `Ok line -> print_string "inOK"; print_string line; return (Writer.write w (line ^ "\n" )) 
+let regexp_cn = Str.regexp "cn *"
+
+let id = ref 0
+
+
+let register (_,r,w) = print_string "Registering\n"; Reader.read_sexp r 
+                        >>|(function
+                             | `Eof -> return ()
+                             | `Ok s -> match command_of_sexp s with
+                                                | Registered(x) -> print_string "Registered\n"; return (id := x)
+                                                | _ -> return (print_string "Server is not responding, please trya agin later")  )
+
+let send w line = if Str.string_match regexp_cn line 0 then 
+                    let result = Enter( int_of_string (Str.replace_first regexp_cn "" line)) in (*TODO: catch int_of_string exception*)
+                        Writer.write_sexp w (sexp_of_command result)
+                  else let result = Message({timestamp = Time.now();
+                                             user_id = !id;
+                                             text = line;
+                                             room_id = 0
+                                            }) in
+                          Writer.write_sexp w (sexp_of_command result)
+                                              
+                      
+
+
+let rec sending (s, r, w) = Reader.read_line (Lazy.force Reader.stdin)
+                            >>= (function
+                                   | `Eof -> return ()
+                                   | `Ok line -> send w line; sending (s, r, w) )
                  
        
-
+let rec receive (s, r, w) = Reader.read_sexp r 
+                            >>= (function
+                                 | `Eof ->  return ()
+                                 | `Ok l -> match command_of_sexp l with
+                                             | Message (m) -> print_string m.text; receive (s, r, w)
+                                             | _ -> receive (s, r, w) ) 
 
 
 let run ~host ~port =
   let connection = Tcp.connect (Tcp.to_host_and_port host port) in
-    ignore(print_string "Ignoring"; connection >>| listen); 
+    ignore((connection >>= register) >>| (fun _ -> ignore(In_thread.run (fun ()-> connection >>= sending)); connection >>= receive)); 
     Deferred.never ()
   
 

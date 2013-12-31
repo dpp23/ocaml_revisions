@@ -1,10 +1,16 @@
 open Core.Std
 open Async.Std
+open Messages
 
-let serve r w = print_string "Serving"; Core.Std.Unix.sleep 2; Writer.write w "Specify a username please: \n"; print_string "Send";
-                Reader.read_line r >>= function
-                                         | `Eof -> print_string "EOF"; return ()
-                                         | `Ok line -> print_string "OK"; return (print_string line)
+let id = ref 0
+
+let rec serve r w = Reader.read_sexp r 
+                       >>= (function
+                             | `Eof -> return ()
+                             | `Ok s -> match command_of_sexp s with
+                                         | Message (m) -> 
+                                               Writer.write_sexp w (sexp_of_command (Message({m with text = "Received: " ^ m.text}))); serve r w
+                                         | _ -> serve r w )
        
 
 
@@ -14,7 +20,7 @@ let run ~port =
     Tcp.Server.create
       ~on_handler_error:`Raise
       (Tcp.on_port port)
-      (fun _addr r w -> serve r w)
+      (fun _ r w -> id:=!id +1; Writer.write_sexp w (sexp_of_command (Registered(!id))); serve r w)
   in
   ignore (host_and_port : (Socket.Address.Inet.t, int) Tcp.Server.t Deferred.t);
   Deferred.never ()

@@ -7,7 +7,7 @@ type message = { timestamp : Time.t;
                  room_id : int
                } with sexp
 
-type command = Register of string
+type command = Registered of int
               |Message of message
               |Promote of int
               |Leave of int
