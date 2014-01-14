@@ -4,8 +4,28 @@ open Messages
 
 exception Horror of string
 
-type st = {id:int; rooms: chat_room list; users: user list} 
+type st = {id:int; rooms: chat_room list; users: user list; last_event: command} 
 let state = ref {id = 0; rooms = []; users = []}
+
+let queue = Queue.empty
+
+let merge a _ c = match c.command with
+                    |Register (name) -> let user = List.hd c.users in
+                                          print_string "Registering " ^ name ^ " as " ^ (string_of_int user.id) ^ "\n";
+                                          Writer.write_sexp user.writer sexp_of_command (Registered(user.id));
+                                          state:= {a with users = user::a.users};
+                                          !state
+                    |Message (m) -> match find_by_id a.rooms m.room_id with
+                                         |None -> raise Horror("Room not found at merging point in the global state!")
+                                         |Some(room) -> List.iter room.users 
+                                                        (fun user -> print_string "Sending message: " ^ m.text ^ " to " ^ (string_of_int m.room_id));
+                                                        Writer.write user.writer sexp_of_command (Message(m)));
+                                                        match find_by_id c.rooms m.room_id with
+                                                               |None -> raise Horror("Room not found at merging point in the joinee!")
+                                                               |Some(room) ->
+                                                                              state:={a with update_by_id a.rooms room}
+                                        
+
 
 module ServerRevision = Make(struct 
                                       type t = st
@@ -40,7 +60,8 @@ let rec serve r w =  let rev2 =
                          Reader.read_sexp r 
                          >>= (function
                              | `Eof -> return ()
-                             | `Ok s -> match command_of_sexp s with
+                             | `Ok s -> let event = command_of_sexp s in
+                                          match event with
                                          | Register (name) -> 
                                               SvRev.read rev iso 
                                               >>| function None -> raise Horror("Error in the library, isolated not found")
@@ -55,7 +76,8 @@ let rec serve r w =  let rev2 =
                                                                                                       writer = w;
                                                                                                       reader = r;
                                                                                                      } :: st.users;
-                                                                                             id = id+1}))
+                                                                                             id = id+1;
+                                                                                             last_action = action}))
                                          | Create (room_id, id) ->
                                               SvRev.read rev iso 
                                               >>| function None -> raise Horror("Error in the library, isolated not found")
@@ -68,7 +90,8 @@ let rec serve r w =  let rev2 =
                                                                               (st with {rooms = { id = room_id;
                                                                                                   users = [];    
                                                                                                   history = [];
-                                                                                                 } :: st.rooms
+                                                                                                 } :: st.rooms;
+                                                                                        last_action = action
                                                                                        }))
                                          | Enter (room_id, id) -> 
                                               SvRev.read rev iso 
@@ -91,7 +114,7 @@ let rec serve r w =  let rev2 =
                                                                                    let rooms = update_by_id st.rooms 
                                                                                                 {r with users = {u with su = (r.users = [])}::r.users in
                                                                                     SvRev.write rev iso 
-                                                                                       (st with {rooms = rooms})
+                                                                                       (st with {rooms = rooms; last_action = action})
                                          | Leave (room_id, id) -> 
                                               SvRev.read rev iso 
                                               >>| function None -> raise Horror("Error in the library, isolated not found")
@@ -113,7 +136,7 @@ let rec serve r w =  let rev2 =
                                                                                    let rooms = update_by_id st.rooms 
                                                                                                 {r with users = remove_by_id r.users u.id in
                                                                                     SvRev.write rev iso 
-                                                                                       (st with {rooms = rooms})
+                                                                                       (st with {rooms = rooms; last_action = action})
                                          |Promote(admin_id, user_id, room_id) -> 
                                               SvRev.read rev iso 
                                               >>| function None -> raise Horror("Error in the library, isolated not found")
@@ -151,7 +174,7 @@ let rec serve r w =  let rev2 =
                                                                                                             let rooms = update_by_id st.rooms 
                                                                                                                 {r with users = users} r.id in
                                                                                                                    SvRev.write rev iso 
-                                                                                                                      (st with {rooms = rooms})
+                                                                                                                      (st with {rooms = rooms; last_action = action})
                                           
 
                                          | Message (m) -> 
@@ -171,7 +194,7 @@ let rec serve r w =  let rev2 =
                                                                                    let rooms = update_by_id st.rooms 
                                                                                                 {r with history = {message with timestamp = Time.now()}::r.history in
                                                                                     SvRev.write rev iso 
-                                                                                       (st with {rooms = rooms})
+                                                                                       (st with {rooms = rooms; last_action = action})
                                                
                                          | _ -> serve r w )
                       in

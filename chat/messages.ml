@@ -7,8 +7,8 @@ type message = { timestamp : Time.t;
                  room_id : int
                } with sexp
 
-type command = Register of string (* *)
-              |Registered of int (* *)
+type command = Register of string (*m*)
+              |Registered of int (*m*)
               |Message of message
               |Promote of int * int * int (* admin, user, room *)
               |Leave of int * int (* *)
@@ -16,6 +16,7 @@ type command = Register of string (* *)
               |Merge of int * int
               |Create of string * int (* *)
               |Error of string (* *)
+              |None
               with sexp
 
 type user = { user : int;  
