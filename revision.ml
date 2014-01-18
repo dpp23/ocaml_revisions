@@ -17,7 +17,7 @@ module type Revision = sig
   val get_revision: result -> t
   val get_isolated: result -> isolated 
   val create:  t -> value -> result
-  val fork: t -> (t -> t) -> t 
+  val fork: t -> (t -> t Deferred.t) -> t Deferred.t
   val join: t -> t -> t
   val init: unit -> t
   val write: t -> isolated -> value -> t
@@ -50,7 +50,7 @@ module Make(X:Isolatable) : (Revision with type value = X.t and type isolated = 
   type t = i Deferred.t  
   type value = X.t
   type isolated = Isolated.t Deferred.t
-  type result = (i * Isolated.t) Deferred.t
+  type result = (i * Isolated.t) Deferred.t 
 
   let create parent init =  parent >>| fun parent -> let (isolated, seq) = Isolated.create init parent.id in 
                                                     let k = (Map.add parent.parent ~key:(Isolated.get_id isolated) ~data:isolated) in

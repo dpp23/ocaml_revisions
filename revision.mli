@@ -17,7 +17,7 @@ module type Revision = sig
   val get_revision: result -> t
   val get_isolated: result -> isolated
   val create:  t -> value -> result
-  val fork: t -> (t -> t) -> t
+  val fork: t -> (t -> t Deferred.t) -> t Deferred.t
   val join: t -> t -> t
   val init: unit -> t
   val write: t -> isolated -> value -> t
