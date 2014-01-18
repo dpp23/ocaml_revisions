@@ -9,17 +9,18 @@ type message = { timestamp : Time.t;
 
 type command = Register of string (*m*)
               |Registered of int (*m*)
-              |Message of message
-              |Promote of int * int * int (* admin, user, room *)
-              |Leave of int * int (* *)
-              |Enter of int * int (* *)
+              |Message of message (*m*)
+              |Promote of int * int * int (* admin, user, room *) (*m*)
+              |Leave of int * int (*m *)
+              |Enter of int * int (* m*)
               |Merge of int * int
-              |Create of string * int (* *)
-              |Error of string (* *)
-              |None
+              |Create of int * int (*m *)
+              |Error of string (*m *)
+              |Room of int
+              |Nop
               with sexp
 
-type user = { user : int;  
+type user = { id : int;  
               su : bool;
               name : string;
               reader : Reader.t;
@@ -29,7 +30,6 @@ type user = { user : int;
 type chat_room = { history : message list;
                    users : user list;
                    id : int;
-                   name : string
                  }
 
 type user_local = { user : int;  
