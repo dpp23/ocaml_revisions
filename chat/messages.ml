@@ -7,18 +7,10 @@ type message = { timestamp : Time.t;
                  room_id : int
                } with sexp
 
-type command = Register of string (*m*)
-              |Registered of int (*m*)
-              |Message of message (*m*)
-              |Promote of int * int * int (* admin, user, room *) (*m*)
-              |Leave of int * int (*m *)
-              |Enter of int * int (* m*)
-              |Merge of int * int
-              |Create of int * int (*m *)
-              |Error of string (*m *)
-              |Room of int
-              |Nop
-              with sexp
+type user_local = { id : int;  
+                    su : bool;
+                    name : string;
+                  }with sexp
 
 type user = { id : int;  
               su : bool;
@@ -26,15 +18,26 @@ type user = { id : int;
               reader : Reader.t;
               writer : Writer.t;
             }
+            
+
+type command = Register of string (*m*)
+              |Registered of int * string (*rm*)
+              |Message of message (*mr*)
+              |Promote of int * int * int (* admin, user, room *) (*rm*)
+              |Leave of int * int (*mr *)
+              |Enter of int * int (*mr*)
+              |Merge of int * int * int (* user room room *)
+              |Create of int * int (*mr *)
+              |Error of string (*rm *)
+              |Room of int * (user_local list) (*r*)
+              |Room_announce of int (*r*)
+              |Nop
+              with sexp
 
 type chat_room = { history : message list;
                    users : user list;
                    id : int;
                  }
-
-type user_local = { user : int;  
-                    su : bool;
-                  }
  
 type chat_room_local = { history : message list;
                          users : user_local list;
