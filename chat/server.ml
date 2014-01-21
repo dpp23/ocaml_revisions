@@ -50,6 +50,7 @@ let merger a _ c = match c.last_event with
         let user = {us with id = a.id + 1} in
         print_string ("Registering " ^ name ^ " as " ^ (string_of_int user.id) ^ "\n");
         Writer.write_sexp user.writer (sexp_of_command (Registered(user.id, name)));
+        List.iter a.users (fun user_ -> Writer.write_sexp user_.writer (sexp_of_command (Registered(user.id, name))));
         List.iter a.rooms (fun room -> 
             print_string ("Inform about room " ^ (string_of_int room.id));
             Writer.write_sexp user.writer 

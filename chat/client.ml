@@ -6,21 +6,21 @@ exception Parse_error of string;;
 
 let regexp_number = Str.regexp "[0-9][0-9]*"
 let regexp_enter = Str.regexp "enter [0-9][0-9]*[ ]*$"
-let regexp_enter_ = Str.regexp "enter[ ]"
+let regexp_enter_ = Str.regexp "enter "
 let regexp_leave = Str.regexp "leave [0-9][0-9]*[ ]*$"
-let regexp_leave_ = Str.regexp "leave[ ]"
-let regexp_send = Str.regexp "send [0-9][0-9]*[ ]"
-let regexp_send_ = Str.regexp "send[ ]"
+let regexp_leave_ = Str.regexp "leave "
+let regexp_send = Str.regexp "send [0-9][0-9]* "
+let regexp_send_ = Str.regexp "send "
 let regexp_promote = Str.regexp "promote [0-9][0-9]*[ ][0-9][0-9]*[ ]*$"
 let regexp_promote_ = Str.regexp "promote[ ]"
 let regexp_merge = Str.regexp "merge [0-9][0-9]*[ ][0-9][0-9]*[ ]*$"
-let regexp_merge_ = Str.regexp "merge[ ]"
-let regexp_create = Str.regexp "create [0-9][0-9]*[ ]"
-let regexp_create_ = Str.regexp "create[ ]"
+let regexp_merge_ = Str.regexp "merge "
+let regexp_create = Str.regexp "create [0-9][0-9]*[ ]*"
+let regexp_create_ = Str.regexp "create "
 let regexp_list_history = Str.regexp "list_history [0-9][0-9]*[ ][0-9][0-9]*[ ]*$"
-let regexp_list_history_ = Str.regexp "list_history[ ]"
+let regexp_list_history_ = Str.regexp "list_history "
 let regexp_list_rooms = Str.regexp "list_rooms[ ]*"
-let regexp_help = Str.regexp  "help [ ]*"
+let regexp_help = Str.regexp  "help[ ]*"
 
 let help = "Usage: \n
             help - list commands help\n
@@ -70,10 +70,12 @@ let rec remove_user_by_id (l : user_local list) id = match l with
 
 let add_message history message = List.sort (message::history) ~cmp:(fun a b -> Time.compare a.timestamp b.timestamp)
 
-let print_message (m:message) =  let pretty_print name = print_string((string_of_sexp (Time.sexp_of_t m.timestamp)) 
+let print_message (m:message) =  let pretty_print name = print_string((Time.to_string m.timestamp) 
                                                                       ^ " Room: " ^ (string_of_int m.room_id) 
                                                                       ^ " From: " ^ (name)
-                                                                      ^ " - " ^ m.text) in
+                                                                      ^ " - " ^ m.text ^ "\n") in
+  List.iter !users (fun user -> print_string(user.name ^ (string_of_int user.id) ^ "\n"));
+  print_string(string_of_int m.user_id);
   match find_user_by_id !users m.user_id with
   |None -> pretty_print "Unknown"
   |Some(u) -> pretty_print u.name
@@ -97,10 +99,9 @@ let rec register (soc,r,w) = print_string "Enter user name: ";
   >>= (function
       | `Eof -> return ()
       | `Ok line -> Writer.write_sexp w (sexp_of_command (Register(line)));
-        print_string("Name send");
         Reader.read_sexp r 
         >>|(function
-            | `Eof ->print_string("NO"); ()
+            | `Eof -> ()
             | `Ok s -> match command_of_sexp s with
               | Registered(user_id,name) -> print_string ("Registered as " ^ name ^ " id: " 
                                                           ^ (string_of_int user_id) ^ "\n");
@@ -118,10 +119,10 @@ let parse_command line = try begin
     Enter(int_of_string (Str.replace_first regexp_enter_ "" line), !id)
   else if Str.string_match regexp_leave line 0 then
     Leave( int_of_string (Str.replace_first regexp_leave_ "" line), !id)
-  else if Str.string_match regexp_create line 0 then
-    Create( int_of_string (Str.replace_first regexp_create_ "" line), !id)
-  else if Str.string_match regexp_create line 0 then
-    let split = String.split (Str.replace_first regexp_create_ "" line) ' ' in
+  else if Str.string_match regexp_create line 0 then 
+    Create( int_of_string (Str.replace_first regexp_create_ "" line), !id) 
+  else if Str.string_match regexp_send line 0 then
+    let split = String.split (Str.replace_first regexp_send_ "" line) ' ' in
     match split with
       room::[message] -> Message({timestamp = Time.now();
                                   user_id = !id;
@@ -148,7 +149,7 @@ let parse_command line = try begin
     list_rooms (); Nop end 
   else if Str.string_match regexp_help line 0 then begin
     print_string(help); Nop end
-  else Nop
+  else raise (Parse_error "Unrecognized command! Type help for manual")
 end with 
 |Parse_error(s)|Failure(s) -> print_string("Error in command parser! " ^ s); Nop
 
@@ -212,10 +213,10 @@ let handle c = match c with
                                ^ (string_of_int room_id) ^ "\n")
     end
   |Error(s) -> print_string ("Error from server! " ^ s ^ "\n")
-  |Room(room_id, user_list) -> begin match List.find !room_ids (fun id -> id = room_id) with
+  |Room(room_id, user_list) -> begin match List.find !rooms (fun room -> room_id = room.id) with
       |None -> print_string("You joined room id: " ^ (string_of_int room_id) ^ "\n");
         print_string "Users in that room are [name id]: \n";
-        List.iter user_list (fun user -> print_string (user.name ^ " " ^ (string_of_int user.id)));
+        List.iter user_list (fun user -> print_string (user.name ^ " " ^ (string_of_int user.id) ^ "\n"));
         rooms := {id = room_id; history = []; users = user_list}::!rooms
       |Some(_) -> print_string("Error! Received entrance information for room you are already in: " 
                                ^ (string_of_int room_id) ^ "\n")
@@ -228,9 +229,9 @@ let handle c = match c with
 
 
 
-let rec sending (s, r, w) = print_string("CMD READ"); Reader.read_line stdin
+let rec sending (s, r, w) =  Reader.read_line stdin
   >>= (function
-      | `Eof -> print_string ("NO read"); return ()
+      | `Eof ->  return ()
       | `Ok line -> match parse_command line with
         |Nop->  sending (s,r,w)
         |result -> Writer.write_sexp w (sexp_of_command result); sending (s,r,w))
