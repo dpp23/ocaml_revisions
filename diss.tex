@@ -1,0 +1,541 @@
+% The master copy of this demo dissertation is held on my filespace
+% on the cl file serve (/homes/mr/teaching/demodissert/)
+
+% Last updated by MR on 2 August 2001
+
+\documentclass[12pt,twoside,notitlepage]{report}
+
+\usepackage{pgf}
+\usepackage{tikz}
+\usetikzlibrary{arrows,automata}
+\usepackage[latin1]{inputenc}
+\usepackage{verbatim}
+\usepackage{tikz}
+\usetikzlibrary{arrows,positioning} 
+\tikzset{
+    %Define standard arrow tip
+    >=stealth',
+    %Define style for boxes
+    punkt/.style={
+           rectangle,
+           rounded corners,
+           draw=black, very thick,
+           text width=6.5em,
+           minimum height=1em,
+           text centered},
+    % Define arrow style
+    pil/.style={
+           ->,
+           thick,
+           shorten <=2pt,
+           shorten >=2pt,}
+}
+
+\usepackage{xcolor}
+ \usepackage[T1]{fontenc}
+ \usepackage{palatino}
+ \usepackage{courier}
+\usepackage{alltt}
+ \usepackage{longtable}
+ \DeclareTextSymbol{\QT}{T1}{39}
+ \DeclareTextSymbol{\COMMA}{T1}{44}
+ \DeclareTextSymbol{\COLON}{T1}{58}
+ \DeclareTextSymbol{\SC}{T1}{59}
+ \DeclareTextSymbol{\BS}{T1}{92}
+ \DeclareTextSymbol{\CI}{T1}{94}
+ \DeclareTextSymbol{\TI}{T1}{126}
+ \definecolor{navy}{rgb}{0.15, 0.15, 0.45} 
+ \definecolor{myblue}{rgb}{0.25, 0.25, 0.645} 
+ \definecolor{darkred}{rgb}{0.845, 0.125, 0.125} 
+ \definecolor{grey}{rgb}{0.4, 0.4, 0.4} 
+ \definecolor{darkgreen}{rgb}{0.125, 0.845, 0.125} 
+ \definecolor{leaf}{rgb}{0.1, 0.9, 0.1} 
+ 
+ \newcommand{\mlkeywordA}[1]{\mbox{\color{cyan}{\textbf{\texttt{#1}}}}}
+ \newcommand{\mlkeywordB}[1]{\mbox{\color{navy}{\textbf{\texttt{#1}}}}}
+ \newcommand{\mlkeyword}[1]{\mbox{\color{red}{#1}}}
+ \newcommand{\mloperator}[1]{\mbox{\color{darkgreen}{#1}}}
+ \newcommand{\mlmodulename}[1]{\mbox{\color{navy}{#1}}}
+ \newcommand{\mlstring}[1]{\mbox{\color{navy}{#1}}}
+ \newcommand{\mlcomments}[1]{\mbox{\color{grey}{#1}}}
+ \newcommand{\mlcodeline}[2]{\tiny\sl #1 & \begin{minipage}[c]{0.8\linewidth}\begin{alltt}\mbox{#2}\end{alltt}\end{minipage}\\}
+ 
+ \usepackage{a4}
+% ---------------------------------------------------------------------
+
+
+\input{epsf}                            % to allow postscript inclusions
+% On thor and CUS read top of file:
+%     /opt/TeX/lib/texmf/tex/dvips/epsf.sty
+% On CL machines read:
+%     /usr/lib/tex/macros/dvips/epsf.tex
+
+
+
+\raggedbottom                           % try to avoid widows and orphans
+\sloppy
+\clubpenalty1000%
+\widowpenalty1000%
+
+\addtolength{\oddsidemargin}{6mm}       % adjust margins
+\addtolength{\evensidemargin}{-8mm}
+
+\renewcommand{\baselinestretch}{1.1}    % adjust line spacing to make
+                                        % more readable
+
+\begin{document}
+
+\bibliographystyle{plain}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Title
+
+
+\pagestyle{empty}
+
+\hfill{\LARGE \bf Dimitar Popov}
+
+\vspace*{60mm}
+\begin{center}
+\Huge
+{\bf Concurrent revisions library for OCaml} \\
+\vspace*{5mm}
+Part II of the Computer
+Science Tripos\\
+\vspace*{5mm}
+Homerton College \\
+\vspace*{5mm}
+\today  % today's date
+\end{center}
+
+\cleardoublepage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Proforma, table of contents and list of figures
+
+\setcounter{page}{1}
+\pagenumbering{roman}
+\pagestyle{plain}
+
+\chapter*{Proforma}
+
+{\large
+\begin{tabular}{ll}
+Name:               & \bf Dimitar Popov                     \\
+College:            & \bf Homerton College                     \\
+Project Title:      & \bf Concurrent revisions library for OCaml \\
+Examination:        & \bf Part II of the Computer
+Science Tripos, July 2014        \\
+Word Count:         & %\bf 1587\footnotemark[1]
+\\
+Project Originator: & Dr Anil Madhavapeddy                    \\
+Supervisor:         & Dr Anil Madhavapeddy                    \\ 
+\end{tabular}
+}
+%\footnotetext[1]{This word count was computed
+%by {\tt detex diss.tex | tr -cd '0-9A-Za-z $\tt\backslash$n' | wc -w}
+%}
+\stepcounter{footnote}
+
+
+\section*{Original Aims of the Project}
+
+To design and build a library for OCaml that implements the concept of Concurrent revisions. Test the library and implement use cases using the library. Understand the trade offs both between the different paths that can be chosen during the implementation of the library and between the more traditional means of concurrent programming and the concept at hand. Evaluate the differences between the API of the original implementation written in C\# and the more functional one that is natural to OCaml. 
+
+
+\section*{Work Completed}
+
+
+\section*{Special Difficulties}
+
+
+ 
+\newpage
+\section*{Declaration}
+
+I, Dimitar Popov of Homerton College, being a candidate for Part II of the Computer
+Science Tripos, hereby declare
+that this dissertation and the work described in it are my own work,
+unaided except as may be specified below, and that the dissertation
+does not contain material that has already been used to any substantial
+extent for a comparable purpose.
+
+\bigskip
+\leftline{Signed }
+
+\medskip
+\leftline{Date }
+
+\cleardoublepage
+
+\tableofcontents
+
+\listoffigures
+
+\newpage
+\section*{Acknowledgements}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% now for the chapters
+
+\cleardoublepage        % just to make sure before the page numbering
+                        % is changed
+
+\setcounter{page}{1}
+\pagenumbering{arabic}
+\pagestyle{headings}
+
+\chapter{Introduction}
+
+\section{Overview of Concurrent revisions}
+
+The idea of Concurrent revisions was initially proposed at OOPSLA'10 [1]. It highlight three main design choices:
+\begin{itemize}
+\item {\bfseries Declarative data sharing} - the user declares what data is to be shared between parallel tasks by the use of isolation types.
+
+\item {\bfseries Automatic isolation} - each task has its own private stable copy of the data that is created at the time of the fork.
+
+\item {\bfseries Deterministic conflict resolution} - the user also specifies a merge function that is used to resolve write-write conflicts at that might arise when joining parallel tasks. Given that this function is deterministic, the conflict resolution is also deterministic.
+
+\end{itemize}
+
+In this framework the unit of concurrency are asynchronous tasks called revisions. They allow the typical functionality for asynchronous tasks - the user can create, fork and join them. 
+
+\section{Motivation}
+ 
+Concurrency is essential and vital in multi core architectures and in distributed systems. Traditional approaches rely on synchronizing parallel tasks by locks, event driven formalisms or similar. This makes conflicts very expensive if determinism is needed. Moreover, these methods are often error prone and extremely hard to debug.
+
+In the concept of concurrent revisions the guarantee of parallel executions being equivalent to some sequential schedule is relaxed. Instead, given the right abstractions, the programmer can reason about the execution directly. 
+
+This approach is data centric in a sense that it takes the complexity of synchronization out of the tasks and adds it to the data declarations.  
+
+\subsection{Applicable areas}
+Every system that is subject to a lot of conflicts typically has to limit the parallelism of its execution in order to ensure consistency and avoid conflicts. Concurrent revisions take the different approach of resolving conflicts instead of avoiding them by scheduling. This makes them suitable for problems where there are a lot of write-write conflicts which should be resolved deterministically and performance can be increased greatly by more parallelism. Some examples of applications that could benefit from concurrent revisions are: 
+
+\begin{itemize}
+
+
+\item
+{\bfseries Bank transactional systems} - Such systems have a lot of constraints on invariants that form write- and read-skews. We will see later how this can nicely be resolved if using concurrent revisions[reference].
+
+\item
+{\bfseries Games} - They are a natural example when high parallelism is crucial for adequate performance. However, the fact that there are a lot of conflicts-user input, graphics rendering, simulating physics and logic, write-back to disk, makes getting their parallelization right tricky. Now what if we execute each of these tasks in separate revision and then join them as appropriate. There is one more concern of course - we have to be able to resolve conflicts. Luckily in order to do so, we simple have to define the merge function, which bundles all the complexity of dealing with conflicts into a single place, making it much more maintainable. Getting the merge function right is crucial, as we do not want our player to dash in a wall that was not displayed on the screen yet.
+
+\item
+{\bfseries Chat systems} - The usage of functional languages for large commercial systems is increasing. One example of that is the Facebook chat, which is written in Erlang. It is a large distributed system that has a lot of conflicts, timing and consistency are vital and it more or less requires 
+deterministic behaviour. This matches the list of requirements for suitability of concurrent revisions and we will see later that it is indeed convenient to write a chat server using them.
+
+\end{itemize}
+
+
+\section{Deeper look into the concept}
+\subsection{Data structures \& Runtime behaviour }
+
+The main data structure in the concept are the revisions. They can be seen as a stable context for each asynchronous task as they are isolated of each other. The isolation types encapsulate the structure of the data to be shared. 
+
+Let's look at a simple example:
+
+%IntRevision example
+%IntIsolated = isolate(int)
+%IntRevision = Revision.make(IntIsolated, 
+%                  fun head parent current -> head + current - parent)
+%(account, revision) = IntRevision.create 0
+  
+%let rev1 = revision.fork(fun r -> account = account + 5)
+%let rev2 = revision.fork(fun r -> account = account + 10)
+  
+%assert(account in revision = 0)
+%assert(account in rev1 = 5)
+%assert(account in rev2 = 10)
+  
+%let rev_join1 = join rev rev1
+%let rev join2 = join rev_join1 rev2
+  
+%assert(account in rev_join1 = 5)
+%assert(account in rev_join2 = 15) 
+{\scriptsize\noindent\begin{longtable}{r|l}
+\mlcodeline{1}{IntIsolated~\mlkeyword{=}~isolate(int)
+}
+\mlcodeline{2}{IntRevision~\mlkeyword{=}~\mlmodulename{Revision}\mbox{}\mloperator{.}make(IntIsolated\mloperator{\mbox{,}}~
+}
+\mlcodeline{3}{~~~~~~~~~~~~~~~~~~\mlkeyword{fun}~head~parent~current~\mlkeyword{->}~head~\mloperator{+}~current~\mloperator{-}~parent)
+}
+\mlcodeline{4}{(account\mloperator{\mbox{,}}~revision)~\mlkeyword{=}~\mlmodulename{IntRevision}\mbox{}\mloperator{.}create~0
+}
+\mlcodeline{5}{~~
+}
+\mlcodeline{6}{\mlkeywordA{let}~rev1~\mlkeyword{=}~revision\mloperator{.}fork(\mlkeyword{fun}~r~\mlkeyword{->}~account~\mlkeyword{=}~account~\mloperator{+}~5)
+}
+\mlcodeline{7}{\mlkeywordA{let}~rev2~\mlkeyword{=}~revision\mloperator{.}fork(\mlkeyword{fun}~r~\mlkeyword{->}~account~\mlkeyword{=}~account~\mloperator{+}~10)
+}
+\mlcodeline{8}{~~
+}
+\mlcodeline{9}{\mlkeyword{assert}(account~\mlkeywordA{in}~revision~\mlkeyword{=}~0)
+}
+\mlcodeline{10}{\mlkeyword{assert}(account~\mlkeywordA{in}~rev1~\mlkeyword{=}~5)
+}
+\mlcodeline{11}{\mlkeyword{assert}(account~\mlkeywordA{in}~rev2~\mlkeyword{=}~10)
+}
+\mlcodeline{12}{~~
+}
+\mlcodeline{13}{\mlkeywordA{let}~rev\_{}join1~\mlkeyword{=}~join~rev~rev1
+}
+\mlcodeline{14}{\mlkeywordA{let}~rev~join2~\mlkeyword{=}~join~rev\_{}join1~rev2
+}
+\mlcodeline{15}{~~
+}
+\mlcodeline{16}{\mlkeyword{assert}(account~\mlkeywordA{in}~rev\_{}join1~\mlkeyword{=}~5)
+}
+\mlcodeline{17}{\mlkeyword{assert}(account~\mlkeywordA{in}~rev\_{}join2~\mlkeyword{=}~15)~}
+\end{longtable}
+}
+Example 1.\\
+
+
+
+ 
+On line 1 the programmer creates a isolation type that isolates the primitive type integer. Then on line 2 and 3, he creates a {\tt IntRevision} module by specifying the isolated type and the merge function. This function takes three arguments - the value of the isolated in the revision we are joining to, the value at the time of the fork and the current value in the joinee. Then he creates a revision specifying initial value for the isolated to be 0. This returns a tuple with type {\tt IntIsolated.t * IntRevision.t}. The user than can use {\tt account} to access its value in different revisions. 
+
+One line 6 and 7 we fork two new revisions that would credit the account with 5 and 10 pounds respectively. At this point {\tt account} has different value in each of the three revisions.
+
+Then we join the two new revisions one by one to our main initial revision (line 13 \& 14). Luckily due to how we specified the merge function and the deterministic nature of the approach, we account has the right amount at the end - 15 pounds.
+
+If we have used a more traditional approach, we would have had to lock the whole system each time we access the value of the account, while now we simply synchronize it when we join the tasks. 
+
+\begin{tikzpicture}[->,>=stealth',shorten >=1pt,auto,node distance=2.8cm,
+                    semithick]
+  \tikzstyle{every state}=[fill=red,draw=none,text=white]
+
+  \node[state] (A)                    {1};              
+  \node[state]         (B) [below right of=A] {3};
+  \node[state]         (C) [below left  of=A] {2};
+  \node[state]         (D) [below left of=B] {4};
+  \node[state]         (E) [below of=D]       {5};
+
+
+
+        
+  \path (A) edge [bend left]  node {} (B)
+            edge [bend right]   node {} (C)
+            edge               node{}       (D)
+        (C) edge [bend right] node{} (D) 
+        (D) edge node{} (E)
+        (B) edge [bend left] node{} (E)   
+        ;      
+\end{tikzpicture}
+ 
+Fig.1: Revision diagram of Example 1. In the following diagram the nodes are the revisions. Outgoing arrows represent forks and  joins are represented by incoming arrows, which are always two, one straight for the revision we are joining to and one bend for the joinee. In the diagram nodes correspond to revisions as follows: 1 - {\tt revision } 2 - {\tt rev1 } 3 - {\tt rev2 } 4 - {\tt join\_rev1 } 5 - {\tt join\_rev2}  
+
+\subsection{Illegal revision diagrams}
+Not all possible joins are legal as some of them might invalidate the assumptions about the flow of revisions. Consider these examples of illegal diagrams:
+
+\begin{tikzpicture}[->,>=stealth',shorten >=1pt,auto,node distance=2.8cm,
+                    semithick]
+  \tikzstyle{every state}=[fill=red,draw=none,text=white]
+
+  \node[state]         (A)                    {1};              
+  \node[state]         (B) [below right of=A] {2};
+  \node[state]         (C) [below right  of=B] {3};
+  \node[state]         (D) [below left of=B] {4};
+  \node[state]         (E) [below of=D]       {5};
+
+  \node[state]         (F) [above right of=C]         {1};
+  \node[state]        (G) [below of=F]         {2};
+  \node[state]         (H) [above right of=F]         {3};
+  \node[state]         (I) [below of=H]        {4};
+        
+  \path (A) edge [bend left]  node {} (B)
+            edge               node{}       (D)
+        (C) edge [bend right] node{} (D) 
+        (D) edge node{} (E)
+        (B) edge [bend left] node{} (C)
+            edge [bend left] node{} (E)
+            
+        (F) edge node{} (G)
+            edge [bend left] node{} (I)
+        (H) edge node{} (I)
+            edge  node{} (G)           
+        ;      
+\end{tikzpicture}
+\\Fig.2: Illegal revision diagrams.
+\vspace{10pt}
+
+In Fig.2 we can see two illegal revision diagrams. In the first one, we join revision 3 to revision 1 before we have joined revision 2 which is the parent revision of 3. This means that the result in revision 5 might not be what we would expect as we are interleaving the joins and we might merge the work done in 2 effectively twice.
+
+In the second example, we are interleaving two separate flows of revisions and there is no way to ensure that they isolate a similar state.
+
+\subsection{Concurrent revisions in the world of OCaml}
+The OCaml implementation of Concurrent Revisions is presented in chapter 3. One of its advantages over the C\# implementation is that it is purely functional and the type checker catches some of the typical mistakes that can be made - trying to access an isolated of a wrong type or join revisions of different types. What it does not do however is check for all types of illegal revision diagrams, instead an exception is raised whenever a illegal join is performed. This is far from ideal and statically type-checking joins for compatibility could be implemented as a future extension.
+
+The API that the implementation exposes to the user is intuitive and resembles the typical OCaml approach for APIs for external libraries. Here is a simple example of its usage:
+
+%module IntRevision = Make(struct
+%    type t = int
+%    let merge head parent current = head + current - parent
+%  end)
+
+%let () =
+%  let r = IntRevision.init () in
+%  let res1 = IntRevision.create r 0 in
+%  let revision = IntRevision.get_revision res1 
+%5  and account = IntRevision.get_isolated res1 in
+%     Deferred.both (IntRevision.fork revision 
+%        (fun r -> return (IntRevision.write r account ((IntRevision.read r account) + 5)))
+%                   (IntRevision.fork revision 
+%                      (fun r -> return (IntRevision.write r account ((IntRevision.read r account) + 10)))
+%     >>|(fun (rev1, rev2 ->
+%        let join_rev1 = IntRevision.join revision rev1 in
+%        let join_rev2 = Intrevision.join join_rev1 rev2 in
+%          assert(IntRevision.read join_rev2 = 15)  
+\newpage
+
+{\scriptsize\noindent\begin{longtable}{r|l}
+\mlcodeline{1}{\mlkeywordA{module}~IntRevision~\mlkeyword{=}~Make(\mlkeyword{struct}
+}
+\mlcodeline{2}{~~~~\mlkeyword{type}~t~\mlkeyword{=}~int
+}
+\mlcodeline{3}{~~~~\mlkeywordA{let}~merge~head~parent~current~\mlkeyword{=}~head~\mloperator{+}~current~\mloperator{-}~parent
+}
+\mlcodeline{4}{~~\mlkeyword{end})
+}
+\mlcodeline{5}{
+}
+\mlcodeline{6}{\mlkeywordA{let}~()~\mlkeyword{=}
+}
+\mlcodeline{7}{~~\mlkeywordA{let}~r~\mlkeyword{=}~\mlmodulename{IntRevision}\mbox{}\mloperator{.}init~()~\mlkeywordA{in}
+}
+\mlcodeline{8}{~~\mlkeywordA{let}~res1~\mlkeyword{=}~\mlmodulename{IntRevision}\mbox{}\mloperator{.}create~r~0~\mlkeywordA{in}
+}
+\mlcodeline{9}{~~\mlkeywordA{let}~revision~\mlkeyword{=}~\mlmodulename{IntRevision}\mbox{}\mloperator{.}get\_{}revision~res1~
+}
+\mlcodeline{10}{~~\mlkeywordA{and}~account~\mlkeyword{=}~\mlmodulename{IntRevision}\mbox{}\mloperator{.}get\_{}isolated~res1~\mlkeywordA{in}
+}
+\mlcodeline{11}{~~~~~\mlmodulename{Deferred}\mbox{}\mloperator{.}both~(\mlmodulename{IntRevision}\mbox{}\mloperator{.}fork~revision~
+}
+\mlcodeline{12}{~~~~~~~~~~~~~~~~~~~~~(\mlkeyword{fun}~r~\mlkeyword{->}~return~(\mlmodulename{IntRevision}\mbox{}\mloperator{.}write~r~account~((\mlmodulename{IntRevision}\mbox{}\mloperator{.}read~r~account)~\mloperator{+}~5)))
+}
+\mlcodeline{13}{~~~~~~~~~~~~~~~~~~~(\mlmodulename{IntRevision}\mbox{}\mloperator{.}fork~revision~
+}
+\mlcodeline{14}{~~~~~~~~~~~~~~~~~~~~~(\mlkeyword{fun}~r~\mlkeyword{->}~return~(\mlmodulename{IntRevision}\mbox{}\mloperator{.}write~r~account~((\mlmodulename{IntRevision}\mbox{}\mloperator{.}read~r~account)~\mloperator{+}~10)))
+}
+\mlcodeline{15}{~~~~~\mloperator{>\mbox{}>\mbox{}|}(\mlkeyword{fun}~(rev1\mloperator{\mbox{,}}~rev2~\mlkeyword{->}
+}
+\mlcodeline{16}{~~~~~~~~\mlkeywordA{let}~join\_{}rev1~\mlkeyword{=}~\mlmodulename{IntRevision}\mbox{}\mloperator{.}join~revision~rev1~\mlkeywordA{in}
+}
+\mlcodeline{17}{~~~~~~~~\mlkeywordA{let}~join\_{}rev2~\mlkeyword{=}~\mlmodulename{Intrevision}\mbox{}\mloperator{.}join~join\_{}rev1~rev2~\mlkeywordA{in}
+}
+\mlcodeline{18}{~~~~~~~~~~\mlkeyword{assert}(\mlmodulename{IntRevision}\mbox{}\mloperator{.}read~join\_{}rev2~account~\mlkeyword{=}~15)}
+\end{longtable}
+}
+
+
+Example 2.\\
+
+In Example 2 we can see the actual implementation of the pseudo code in Example 1. From line 1 to 4 the user creates the {\tt IntRevision} module using a simple anonymous module specifying the type of the isolated data and the merge function. Then on line 7 he initializes an empty revision and one 8 and 9 he adds a new isolated to the initial revision to create a new one. He them forks the two asynchronous account credits (line 11 to 14) and later joins them. 
+
+This API is not as straight forward as the one in the C\# implementations for couple of reasons. Firstly since it is purely functional, revisions are immutable which requires to create a new revision at each join. Secondly, we need to explicitly create new isolated variables. What is more, it does not allow having isolated from different types in a revision, a trivial workaround for which is to use tuples.  
+
+
+
+
+\cleardoublepage
+
+
+
+\chapter{Preparation}
+\section{The author in the world of Concurrency}
+As part of my degree I have gained broad knowledge of the problems that arise from Concurrency and the typical approaches for solving them. The Concurrent and Distributed Systems course gave me most insight into why and how Concurrent revisions can be used for parallel programming. After reading the original paper, the concept naturally fit in and expanded the mental model I have created about the issues and solutions in the world of Concurrency.  
+
+\section{Familiarizing with the OCaml programming language}
+Prior to starting the project, I had almost no experience with the OCaml programming language. For that reason I dedicated the first part of my project to making myself familiar with it. I used the Real World OCaml book [3] to guide me through the concepts and patterns for the language. I was able to quickly transfer and expand my skills in ML into OCaml without much difficulty.
+
+\section{The Core and Async libraries}
+I made extensive use of the Core and Async libraries for OCaml. The latter was used in the core of the implementation and the use cases. The Revision module conforms to the pattern of deferred computations in the Async library. This naturally happened in the development process, mainly because the library enforces them. Another reason for this is that the revision and isolated data types are completely isolated, making it trivial to implement them as deferred data types and the forks and the joins as deferred computations.  
+
+
+
+\cleardoublepage
+\chapter{Implementation}
+
+\section{Nuts and Bolts}
+
+In depth description of the internal structure, the API.
+
+\section{Design decisions and trade-offs}
+
+Quick creation of revisions (also space consuming) vs quick read/write. Chose the later, because it looked as a better fit for the use cases, but the other one is equally valid solution. Othes design decisions
+
+ 
+\section{Use cases}
+\subsection{Chat server}
+(not yet implemented)\\
+ 
+ 
+ why it is usefull to do it that way (trivial problem, but doing it in this framework is interesting and could show much)
+structure \& implementation (briefly)
+experimental data - a lot of chat rooms, merging chatrooms, conflicts; some plots could be good
+sequential version (hopefully) – compare both
+   
+\subsection{Other one?}
+
+\section{Remaining issues}
+
+
+
+
+
+
+\cleardoublepage
+\chapter{Evaluation}
+
+\section{Fitness of the concept for the use cases}
+Was it easy to implement them in that way? Did it make me thing in a different way (was it better)? What was exceptionally good about it?
+
+\section{Negative aspects}
+Any syntactic of conceptual awkwardness encountered along the way
+
+\section{Performance evaluation}
+\subsection{Experimental data}
+Plots, analyzes, etc.
+
+\subsection{Performance analyzes}
+Time, space, what seem to be a bottle neck, were the design choices right? 
+
+
+
+
+\cleardoublepage
+\chapter{Conclusion}
+
+It works! (or not)
+
+
+
+
+\cleardoublepage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% the bibliography
+
+\addcontentsline{toc}{chapter}{Bibliography}
+\bibliography{refs}
+\cleardoublepage
+\chapter{Bibliography}
+\begin{description}
+\item{[1]} \emph{Concurrent Programming with Revisions and Isolation Types}, Sebastian Burckhardt, Alexandro Baldassion, and Daan Leijen. OOPSLA'10
+\item{[2]} \emph{Source repository:} https://github.com/dpp23/ocaml\_revisions
+\item{[2]} \emph{Real World OCaml} Jason Hickey, Anil Madhavapeddy, and Yaron Minsky; O'Reilly 2013
+\end{description}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% the appendices
+\appendix
+
+
+\chapter{Project Proposal}
+
+%\input{propbody}
+
+\end{document}
