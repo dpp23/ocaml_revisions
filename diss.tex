@@ -461,16 +461,120 @@ I made extensive use of the Core and Async libraries for OCaml. The latter was u
 
 \section{Nuts and Bolts}
 
-In depth description of the internal structure, the API.
+Usage of the library is straight forward and effortless. The user first has to satisfy a module signature called {\tt Isolatable}:
 
-\section{Design decisions and trade-offs}
+{\scriptsize\noindent\begin{longtable}{r|l}
+\mlcodeline{1}{\mlkeywordA{module}~\mlkeyword{type}~Isolatable~\mlkeyword{=}~\mlkeyword{sig}
+}
+\mlcodeline{2}{~~\mlcomments{(**~Type~{to}~be~isolated~**)}
+}
+\mlcodeline{3}{~~\mlkeyword{type}~t
+}
+\mlcodeline{4}{~~\mlcomments{(**~Merge~{function}{\mbox{\COLON}}~merge~{[}head{]}~{[}parent{]}~{[}current{]}~**)}
+}
+\mlcodeline{5}{~~\mlkeyword{val}~merge\mloperator{\mbox{\COLON}}~t~\mlkeyword{->}~t~\mlkeyword{->}~t~\mlkeyword{->}~t
+}
+\mlcodeline{6}{\mlkeyword{end}
+}
+\mlcodeline{7}{
+}
+\mlcodeline{8}{\mlkeywordA{module}~Make(X\mloperator{\mbox{\COLON}}Isolatable)~\mloperator{\mbox{\COLON}}~
+}
+\mlcodeline{9}{~~~~~~~~~~~~(Revision~\mlkeyword{with}~\mlkeyword{type}~value~\mlkeyword{=}~\mlmodulename{X}\mbox{}\mloperator{.}t~\mlkeywordA{and}~\mlkeyword{type}~isolated~\mlkeyword{=}~(int~\mloperator{*}~\mlmodulename{X}\mbox{}\mloperator{.}t)~\mlmodulename{Deferred}\mbox{}\mloperator{.}t)}
+\end{longtable}
+}
 
-Quick creation of revisions (also space consuming) vs quick read/write. Chose the later, because it looked as a better fit for the use cases, but the other one is equally valid solution. Othes design decisions
+Then from this module, using the {\tt Make} functor, he create a {\tt Revision} module that satisfies the following signature:
+
+{\scriptsize\noindent\begin{longtable}{r|l}
+\mlcodeline{1}{\mlkeywordA{module}~\mlkeyword{type}~Revision~\mlkeyword{=}~\mlkeyword{sig}
+}
+\mlcodeline{2}{~~\mlkeyword{type}~i
+}
+\mlcodeline{3}{~~\mlkeyword{type}~result
+}
+\mlcodeline{4}{~~\mlkeyword{type}~t
+}
+\mlcodeline{5}{~~\mlkeyword{type}~isolated
+}
+\mlcodeline{6}{~~\mlkeyword{type}~value
+}
+\mlcodeline{7}{
+}
+\mlcodeline{8}{~~\mlkeyword{val}~init\mloperator{\mbox{\COLON}}~unit~\mlkeyword{->}~t
+}
+\mlcodeline{9}{~~\mlcomments{(**~Adds~a~{new}~isolated~{with}~{[}value{]}~{and}~returns~a~{new}~result~**)}
+}
+\mlcodeline{10}{~~\mlkeyword{val}~create\mloperator{\mbox{\COLON}}~~t~\mlkeyword{->}~value~\mlkeyword{->}~result
+}
+\mlcodeline{11}{~~
+}
+\mlcodeline{12}{~~\mlcomments{(**~For~breaking~the~result~into~revision~{and}~isolated~**)}
+}
+\mlcodeline{13}{~~\mlkeyword{val}~get\_{}revision\mloperator{\mbox{\COLON}}~result~\mlkeyword{->}~t
+}
+\mlcodeline{14}{~~\mlkeyword{val}~get\_{}isolated\mloperator{\mbox{\COLON}}~result~\mlkeyword{->}~isolated
+}
+\mlcodeline{15}{~~
+}
+\mlcodeline{16}{~~\mlcomments{(**~Scheduling~primitives~**)}
+}
+\mlcodeline{17}{~~\mlkeyword{val}~fork\mloperator{\mbox{\COLON}}~t~\mlkeyword{->}~(t~\mlkeyword{->}~t~\mlmodulename{Deferred}\mbox{}\mloperator{.}t)~\mlkeyword{->}~t~\mlmodulename{Deferred}\mbox{}\mloperator{.}t
+}
+\mlcodeline{18}{~~\mlkeyword{val}~join\mloperator{\mbox{\COLON}}~t~\mlkeyword{->}~t~\mlkeyword{->}~t
+}
+\mlcodeline{19}{~~
+}
+\mlcodeline{20}{~~\mlcomments{(**~Isolated~access~**)}
+}
+\mlcodeline{21}{~~\mlkeyword{val}~write\mloperator{\mbox{\COLON}}~t~\mlkeyword{->}~isolated~\mlkeyword{->}~value~\mlkeyword{->}~t
+}
+\mlcodeline{22}{~~\mlkeyword{val}~read\mloperator{\mbox{\COLON}}~t~\mlkeyword{->}~isolated~\mlkeyword{->}~value~option~\mlmodulename{Deferred}\mbox{}\mloperator{.}t
+}
+\mlcodeline{23}{
+}
+\mlcodeline{24}{\mlkeyword{end}}
+\end{longtable}
+}
+ 
+Creation of revisions is done by the {\tt init} and {\tt create} functions. The former initializes an empty revision and the latter takes a revision and an initial value of the isolated type and returns a {\tt result}, which contains a tuple of {\tt Revision.t} and {\tt isolated}. This tuple can then be broken up by the usage of {\tt get\_revision} and {\tt get\_isolated}. This seems a bit awkward to use, but it is enforced by the Async library. Both {\tt Revision.t} and {\tt isolated} are deferred types, however since create takes a deferred type as first argument, it has to return a deferred type as well, meaning it cannot return a tuple of deferreds.
+
+The scheduling primitives are the trivial {\tt fork} and {\tt join} operations common for asynchronous tasks. Note that they are both purely functional and do not mutate any of the input state and return a fresh revision each time. The right type of revision for these is type checked. For the illegal revision diagrams when the merge cannot reconcile a valid state, because there is not enough information in the revisions, an exception is raised. There are still some cases when the programmer can implement by error illegal schedules and run them successfully. Ideally these errors should be caught by the type checked or by a more elaborate dynamic runtime check. These are left as a future extension and for now such errors are considered programmer fault. 
+
+Accessing the isolated variables is allowed by the {\tt write} and {\tt read} functions.
+The former is also purely function and returns a new revision with the updated value. In the case when the isolated is not in this revision an exception will be raised [remove the option from read].
+
+The internal structure of the revisions is implemented by the following data type:
+
+{\scriptsize\noindent\begin{longtable}{r|l}
+\mlcodeline{1}{\mlkeyword{type}~t~\mlkeyword{=}~\mloperator{\{}~parent~\mloperator{\mbox{\COLON}}~((int\mloperator{\mbox{,}}~\mlmodulename{Isolated}\mbox{}\mloperator{.}t\mloperator{\mbox{,}}~\mlmodulename{Int}\mbox{}\mloperator{.}comparator\_{}witness)~\mlmodulename{Map}\mbox{}\mloperator{.}t)\mloperator{\mbox{\SC}}
+}
+\mlcodeline{2}{~~~~~~~~~~~self~\mloperator{\mbox{\COLON}}~((int\mloperator{\mbox{,}}~\mlmodulename{Isolated}\mbox{}\mloperator{.}t\mloperator{\mbox{,}}~\mlmodulename{Int}\mbox{}\mloperator{.}comparator\_{}witness)~\mlmodulename{Map}\mbox{}\mloperator{.}t)\mloperator{\mbox{\SC}}
+}
+\mlcodeline{3}{~~~~~~~~~~~written~\mloperator{\mbox{\COLON}}~\mlmodulename{WrittenSet}\mbox{}\mloperator{.}t\mloperator{\mbox{\SC}}
+}
+\mlcodeline{4}{~~~~~~~~~~~id~\mloperator{\mbox{\COLON}}~int~
+}
+\mlcodeline{5}{~~~~~~~~~\mloperator{\}}~\mlmodulename{Deferred}\mbox{}\mloperator{.}t}
+\end{longtable}
+}
+
+It is a deferred record type which contains two maps that map isolated variables to their to their value in the parent or the current revision respectfully. Their is also a written set that keeps track of which isolated variables have been updated in order to improve the performance at join time. The {\tt Isolated.t} is itself implemented simply as an integer value that is used as a key into the maps. The {\tt id} field in the revision type keeps track of the id of the last created isolated in that revision chain.    
+
+\section{Design decisions and complexity}
+
+The key aims of the design were to produce a solution that is purely functional, as well as efficient.
+
+The main design choice for the implementation was how to implement the revisions internally. The obvious choice for the mapping of isolated variables to values was either using hash tables or maps. The former would have given us constant time for all the update and add operations. However, they are imperative which would have broken the functional model of their operation. We could have hidden under the curtains the fact we are using a mutable data structure by lazy replication, which however would have increased the space complexity by the order of number of revisions times the number of isolated variables. Given that the functional nature that we were aiming for, which required creating a new revision after each operation, this was highly undesirable. Instead the choice of using maps was made. Since only insertion and update operations were performed on the maps, all operations on maps we use are of logarithmic time. What is more, since maps in OCaml are purely functional, they reuse a lot of their internal structure and there is no duplication of data. This results in space complexity of order of the sum of the number of revisions and the number of isolated writes. 
+
+All operations on revisions were implemented as deferred computations in the framework of the Async library. This makes the Concurrent revisions easy to integrate in any application using the idioms of the Async library, which is one of the mainstream parallel frameworks for OCaml.
+
+Reads, writes and {\tt create} take logarithmic time, as they effectively are operations on a map. Forking takes constant time and joins take time O(klgn) where n is the number of isolated variables and k is the number of written values inside the fork.     
 
  
 \section{Use cases}
 \subsection{Chat server}
-(not yet implemented)\\
+
  
  
  why it is usefull to do it that way (trivial problem, but doing it in this framework is interesting and could show much)
