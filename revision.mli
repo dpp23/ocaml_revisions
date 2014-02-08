@@ -1,6 +1,9 @@
 open Core.Std
 open Async.Std
 
+exception Isolated_Not_Found
+exception Incompatible_Join
+
 module type Isolatable = sig
   type t
   val merge: t -> t -> t -> t
@@ -21,7 +24,7 @@ module type Revision = sig
   val join: t -> t -> t
   val init: unit -> t
   val write: t -> isolated -> value -> t
-  val read: t -> isolated -> value option Deferred.t
+  val read: t -> isolated -> value Deferred.t
 
 end
 

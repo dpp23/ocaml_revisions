@@ -1,6 +1,10 @@
 open Core.Std
 open Async.Std
 
+
+exception Isolated_Not_Found
+exception Incompatible_Join
+
 module type Isolatable = sig
   type t
   val merge: t -> t -> t -> t
@@ -21,7 +25,7 @@ module type Revision = sig
   val join: t -> t -> t
   val init: unit -> t
   val write: t -> isolated -> value -> t
-  val read: t -> isolated -> value option Deferred.t
+  val read: t -> isolated -> value Deferred.t
 
 end
 
@@ -67,19 +71,22 @@ module Make(X:Isolatable) : (Revision with type value = X.t and type isolated = 
                                                                       { a with self = Map.add a.self ~key:x ~data:(Isolated.merge yp ya y);
                                                                                written = WrittenSet.add a.written x
                                                                       } b xs
-                                                                     |_ -> join_rec a b xs
+                                                                     |_ -> raise Incompatible_Join
                                                     in
                                                       join_rec a b wlist 
             
   
 
-  let write a iso v = Deferred.both a iso >>| fun (a, iso) -> 
-                                                { a with self = Map.add a.self ~key:(Isolated.get_id iso) ~data:(Isolated.update iso v);
-                                                  written = WrittenSet.add a.written (Isolated.get_id iso)
-                                                }
+  let write a iso v = Deferred.both a iso 
+                      >>| fun (a, iso) ->  
+                           match Map.find a.self (Isolated.get_id iso) with
+                             Some _ -> { a with self = Map.add a.self ~key:(Isolated.get_id iso) ~data:(Isolated.update iso v);
+                                          written = WrittenSet.add a.written (Isolated.get_id iso)
+                                       }
+                             |None -> raise Isolated_Not_Found
   let read a iso = Deferred.both a iso >>| fun (a, iso) -> match Map.find a.self (Isolated.get_id iso) with
-                                    Some v -> Some (Isolated.read v)
-                                   |None -> None
+                                    Some v -> Isolated.read v
+                                   |None -> raise Isolated_Not_Found
   let init () = return
                 { self = Map.empty ~comparator:Int.comparator;
                   parent = Map.empty ~comparator:Int.comparator;
