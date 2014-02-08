@@ -61,7 +61,11 @@ module Make(X:Isolatable) : (Revision with type value = X.t and type isolated = 
                                                     let k = (Map.add parent.parent ~key:(Isolated.get_id isolated) ~data:isolated) in
                                                       ({parent =  k; self = k;  written = parent.written; id = seq; fork_exn = None}, isolated) 
 
-  let fork a f = try f a with e -> a >>| fun a -> return {a with fork_exn = Some(e)}
+  let update_parent r = r >>| fun r -> {r with parent = r.self}
+
+  let fork a f = try f (update_parent a)
+                 with e -> a 
+                      >>| fun a -> return {a with fork_exn = Some(e)}
   
   let join a b = Deferred.both a b 
                  >>| fun (a,b) -> 
@@ -73,12 +77,14 @@ module Make(X:Isolatable) : (Revision with type value = X.t and type isolated = 
                                                       |x::xs -> let k = Map.find b.self x and kp = Map.find b.parent x and ka = Map.find a.self x in
                                                                    match (k, kp, ka) with
                                                                      (Some(y), Some(yp), Some(ya)) -> join_rec 
-                                                                      { a with self = Map.add a.self ~key:x ~data:(Isolated.merge yp ya y);
+                                                                      { a with self = Map.add a.self ~key:x ~data:(Isolated.merge ya yp y);
                                                                                written = WrittenSet.add a.written x
                                                                       } b xs
                                                                      |_ -> raise Incompatible_Join
                                                     in
-                                                      join_rec a b wlist 
+                                                      join_rec a b wlist
+                                                    
+                                                      
             
   
 
