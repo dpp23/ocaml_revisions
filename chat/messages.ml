@@ -35,10 +35,7 @@ type command = Register of string (*m*)
               |Nop
               with sexp
 
-type chat_room = { history : message list;
-                   users : user list;
-                   id : int;
-                 }
+
  
 type chat_room_local = { history : message list;
                          users : user_local list;
