@@ -31,6 +31,7 @@ type command = Register of string (*m*)
               |Error of string (*rm *)
               |Room of int * (user_local list) (*r*)
               |Room_announce of int (*r*)
+              |User_announce of int * string
               |Nop
               with sexp
 

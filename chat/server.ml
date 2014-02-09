@@ -55,6 +55,10 @@ let merger a _ c = match c.last_event with
             print_string ("Inform about room " ^ (string_of_int room.id));
             Writer.write_sexp user.writer 
               (sexp_of_command (Room_announce(room.id))));
+        List.iter a.users (fun u -> 
+            print_string ("Inform about user " ^ (string_of_int u.id));
+            Writer.write_sexp user.writer 
+              (sexp_of_command (User_announce(u.id, u.name))));
         state:= {a with users = user::a.users; id = a.id+1};
         !state
     end
