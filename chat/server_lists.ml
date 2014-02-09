@@ -17,7 +17,7 @@ module RepMessage : sig
 
   val init: unit -> t
   val add: t -> a -> t
-  val filter: t -> (a -> bool) -> a list
+  val filter_by_time: t -> Time.t -> a list
 end =
 struct
   type a = message
@@ -25,7 +25,10 @@ struct
 
   let init () = []
   let add l x = add_to_list l x (fun x y -> Time.compare x.timestamp y.timestamp)
-  let filter l f = List.filter l f
+  let rec filter_by_time l time = match l with
+                                   |[] -> []
+                                   |x::xs -> if(Time.compare x.timestamp time > -1) then x::(filter_by_time xs time)
+                                             else []
 end
 
 module RepUser : sig
@@ -198,7 +201,9 @@ let merger a _ c = match c.last_event with
             send_to_user_list a_room.users (Enter(room_id, id));
             Writer.write_sexp user.writer 
               (sexp_of_command (Room(a_room.id, RepUser.map (RepUser.add a_room.users user)      
-                                       user_to_user_local))); 
+                                       user_to_user_local)));
+            List.iter (RepMessage.filter_by_time a_room.history c.last_event_time) 
+                        (fun m -> Writer.write_sexp user.writer (sexp_of_command(Message(m)))); 
             print_string ("User enter " ^ (string_of_int room_id));
             state:={a with rooms = update_room_by_id a.rooms {a_room with users = RepUser.add a_room.users user}};
             !state
