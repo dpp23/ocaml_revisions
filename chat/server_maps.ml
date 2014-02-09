@@ -21,14 +21,12 @@ module RepMessage : sig
 end =
 struct
   type a = message
-  type t = message list
+  type t = ((Time.t, message, Time.comparator) Map.t)
 
-  let init () = []
-  let add l x = add_to_list l x (fun x y -> Time.compare x.timestamp y.timestamp)
-  let rec filter_by_time l time = match l with
-                                   |[] -> []
-                                   |x::xs -> if(Time.compare x.timestamp time > -1) then x::(filter_by_time xs time)
-                                             else []
+  let init () = Map.empty ~comparator:Time.comparator
+  let add l x = Map.add l x.timestamp x 
+  let filter_by_time l time = let (_,v) = StdLabels.List.split (Map.to_alist (Map.filter l (fun ~key ~data:_-> (Time.compare key time) > -1 ))) in
+    v
 end
 
 module RepUser : sig
@@ -50,31 +48,28 @@ module RepUser : sig
 end =
 struct
   type a = user 
-  type t = user list
+  type t = ((int, user, Int.comparator) Map.t)
 
-  let init () = []
-  let is_empty = List.is_empty 
-  let add l x = x::l
-  let find (l : t) id = List.find l (fun x -> x.id = id)
+  let init () = Map.empty ~comparator:Int.comparator
+  let is_empty l = Map.is_empty l
+  let add (l : t) (x : a) = Map.add l x.id x 
+  let find (l : t) id = Map.find l id 
   let exist l id = match find l id with
     |None -> false
     |_ -> true
-  let rec remove (l : t) id = match l with
-    |[] -> l
-    |x::xs -> if x.id = id then xs
-      else x::(remove xs id)
-  let send_to_users l c = List.iter l (fun x -> Writer.write_sexp x.writer (sexp_of_command c))
-  let rec update (l : t) (x : a) = match l with
-    |[] -> []
-    |k::ks -> if x.id = k.id then x::ks
-      else k::(update ks x)
-  let rec find_by_name (l : t) name = match l with
-    |[] -> None
-    |y::ys -> if y.name = name then Some(y)
-      else find_by_name ys name
+  let remove (l : t) id = Map.remove l id
+  let send_to_users l c = Map.iter l (fun ~key:_ ~data:x -> Writer.write_sexp x.writer (sexp_of_command c))
+  let update (l : t) (x : a) = Map.add l x.id x
+  let find_by_name (l : t) (name : string) =let (_,x) = StdLabels.List.split (Map.to_alist l) in 
+    let rec find l name =  match l with
+      |[] -> None
+      |y::ys -> if y.name = name then Some(y)
+        else find ys name
+    in
+    find x name
 
-  let iter (l:t) f = List.iter l f
-  let map (l:t) f = List.map l f
+  let iter (l:t) f = Map.iter l (fun ~key:_ ~data -> f data)
+  let map (l:t) f = let (_,x) = StdLabels.List.split(Map.to_alist (Map.map l f)) in x
   let exists_by_name (l:t) name = match find_by_name l name with
     |None -> false
     |_ -> true
@@ -100,24 +95,18 @@ module RepRoom : sig
 end =
 struct
   type a = chat_room
-  type t = chat_room list
+  type t = ((int, chat_room, Int.comparator) Map.t)
 
-  let init () = []
-  let add l x = x::l
-  let find l id = List.find l (fun (x:chat_room) -> x.id = id)
+  let init () = Map.empty ~comparator:Int.comparator
+  let add (l : t) (x : a) = Map.add l x.id x 
+  let find (l : t) id = Map.find l id 
   let exist l id = match find l id with
     |None -> false
     |_ -> true
-  let rec remove l id = match l with
-    |[] -> l
-    |x::xs -> if x.id = id then xs
-      else x::(remove xs id)
-  let rec update l x = match l with
-    |[] -> []
-    |k::ks -> if x.id = k.id then x::ks
-      else k::(update ks x)
-  let iter l f = List.iter l f
-  let map l f = List.map l f
+  let remove (l : t) id = Map.remove l id
+  let update (l : t) (x : a) = Map.add l x.id x                                         
+  let iter (l:t) f = Map.iter l (fun ~key:_ ~data -> f data)
+  let map (l:t) f = let (_,x) = StdLabels.List.split(Map.to_alist (Map.map l f)) in x
 end
 
 
@@ -205,7 +194,7 @@ let merger a _ c = match c.last_event with
               (sexp_of_command (Room(a_room.id, RepUser.map (RepUser.add a_room.users user)      
                                        user_to_user_local)));
             List.iter (RepMessage.filter_by_time a_room.history c.last_event_time) 
-                        (fun m -> Writer.write_sexp user.writer (sexp_of_command(Message(m)))); 
+              (fun m -> Writer.write_sexp user.writer (sexp_of_command(Message(m)))); 
             print_string ("User enter " ^ (string_of_int room_id));
             state:={a with rooms = update_room_by_id a.rooms {a_room with users = RepUser.add a_room.users user}};
             !state
@@ -290,7 +279,7 @@ let handle_action rev iso action r w = print_string("handle action"); match acti
                  (Error("You are already in " ^ (string_of_int room_id)))); rev end
           else 
             let rooms_ = update_room_by_id st.rooms 
-                {r with users = RepUser.add r.users {u with su = (r.users = RepUser.init())} } in
+                {r with users = RepUser.add r.users {u with su = (RepUser.is_empty r.users)} } in
             SvRev.write rev iso 
               {st with rooms = rooms_; last_event = action;
                        last_event_time = Time.now()})
