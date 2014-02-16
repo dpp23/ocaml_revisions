@@ -74,8 +74,6 @@ let print_message (m:message) =  let pretty_print name = print_string((Time.to_s
                                                                       ^ " Room: " ^ (string_of_int m.room_id) 
                                                                       ^ " From: " ^ (name)
                                                                       ^ " - " ^ m.text ^ "\n") in
-  List.iter !users (fun user -> print_string(user.name ^ (string_of_int user.id) ^ "\n"));
-  print_string(string_of_int m.user_id);
   match find_user_by_id !users m.user_id with
   |None -> pretty_print "Unknown"
   |Some(u) -> pretty_print u.name
@@ -105,7 +103,8 @@ let rec register (soc,r,w) = print_string "Enter user name: ";
             | `Ok s -> match command_of_sexp s with
               | Registered(user_id,name) -> print_string ("Registered as " ^ name ^ " id: " 
                                                           ^ (string_of_int user_id) ^ "\n");
-                id := user_id
+                id := user_id;
+                users := {id = user_id; name = name; su = false } :: !users
               | Error(s) -> print_string ("Error from server: " ^ s); 
                 ignore(register (soc,r,w));
                 ()
@@ -122,9 +121,9 @@ let parse_command line = try begin
   else if Str.string_match regexp_create line 0 then 
     Create( int_of_string (Str.replace_first regexp_create_ "" line), !id) 
   else if Str.string_match regexp_send line 0 then
-    let split = String.split (Str.replace_first regexp_send_ "" line) ' ' in
+    let split = String.lsplit2 (Str.replace_first regexp_send_ "" line) ' ' in
     match split with
-      room::[message] -> Message({timestamp = Time.now();
+      Some (room, message) -> Message({timestamp = Time.now();
                                   user_id = !id;
                                   text = message;
                                   room_id = (int_of_string room)
@@ -211,6 +210,12 @@ let handle c = match c with
         room_ids := room_id::!room_ids
       |Some(_) -> print_string("Error! Known room announced. Id: " 
                                ^ (string_of_int room_id) ^ "\n")
+    end
+  |User_announce(user_id, name)-> begin match List.find !users (fun u -> u.id = user_id) with
+      |None -> print_string("Announced user id: " ^ (string_of_int user_id) ^ " " ^ name ^ "\n");
+        users := {id = user_id; name = name; su = false}::!users
+      |Some(_) -> print_string("Error! Known user announced. Id: " 
+                               ^ (string_of_int user_id) ^ "\n")
     end
   |Error(s) -> print_string ("Error from server! " ^ s ^ "\n")
   |Room(room_id, user_list) -> begin match List.find !rooms (fun room -> room_id = room.id) with
