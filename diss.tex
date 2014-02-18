@@ -1,7 +1,7 @@
 % The master copy of this demo dissertation is held on my filespace
 % on the cl file serve (/homes/mr/teaching/demodissert/)
 
-% Last updated by MR on 2 August 2001
+% Last updated by MR on 2 August 2001 
 
 \documentclass[12pt,twoside,notitlepage]{report}
 
@@ -189,9 +189,14 @@ extent for a comparable purpose.
 
 \chapter{Introduction}
 
+\section{Overview of the project}
+The biggest challenge when using parallel programming is typically how to keep track of the side effects of computations that are executed in parallel. Traditional method for dealing with this issue often limit concurrency, do not provide sufficient determinism and are error prone. Ideally, we would like a concept where all conflict between parallel tasks are resolved deterministically with as less as possible effort from the programmer. 
+
+One concept that satisfies these requirements is that of Concurrent Revisions, initially proposed at OOPSLA'10 [1]. The aim of this projec is to implement this concept in the functional language OCaml and evaluate its performance and usability. The domain of functional languages was chosen because of their inherited determinism which makes using parallelism less complex and provides a facility for tracking side effects. I have designed and implemented a library that incorporates the ideas of Concurrent Revisions and ensured its correctness with a number of unit tests. Together with some small example code, two use cases were produced using the library - a logging system and a chat service. They were used to evaluate the performance and usability of the implementation and the whole concept in the world of OCaml. The conclusion was that [add when actually have a conclusion].  
+
 \section{Overview of Concurrent revisions}
 
-The idea of Concurrent revisions was initially proposed at OOPSLA'10 [1]. It highlight three main design choices:
+The idea of Concurrent revisions as initially proposed highlights three main design choices:
 \begin{itemize}
 \item {\bfseries Declarative data sharing} - the user declares what data is to be shared between parallel tasks by the use of isolation types.
 
@@ -201,15 +206,29 @@ The idea of Concurrent revisions was initially proposed at OOPSLA'10 [1]. It hig
 
 \end{itemize}
 
-In this framework the unit of concurrency are asynchronous tasks called revisions. They allow the typical functionality for asynchronous tasks - the user can create, fork and join them. 
+In this framework the unit of concurrency are asynchronous tasks called revisions. They allow the typical functionality for asynchronous tasks - the user can create, fork and join them. This removes the complexity of synchronization out of the tasks themselves and gathers in into a single place - the merge function. 
 
 \section{Motivation}
+
+\subsection{Overview of other approaches to concurrency}
  
 Concurrency is essential and vital in multi core architectures and in distributed systems. Traditional approaches rely on synchronizing parallel tasks by locks, event driven formalisms or similar. This makes conflicts very expensive if determinism is needed. Moreover, these methods are often error prone and extremely hard to debug.
+
+Standard locking schemes are sometimes a good approach to ensure consistency of data shared between multiple parallel tasks. However locking limits concurrency since task are blocked until it is safe to continue. Significant effort is required from the programmer to reason about all possible interleaves of task execution. Identifying the scope of critical sections becomes tricky as it could either limit concurrency or insufficient isolation. This approach is highly error prone and extremely difficult to maintain.
+
+Instead of locking one can use event-driven systems, where tasks execution is triggered by event from other tasks.  This results in inverted control structure of the program. The programmer's control flow becomes inverted and results into convoluted control logic. In such a system, often the actual tasks have to be very fine grained in order to maximize performance which complicates the logic and makes it difficult to maintain.
+
+Another approach is instead of trying to avoid conflicts to try to resolve them. This is in the core of transactional systems in which each tasks takes a copy of the shared data and conflicts are resolved at the time of the join. However conflicts are resolved non-deterministically which complicates reasoning about the execution. Another criticism of transactional systems is that they ensure serializability, which is not necessary for all use cases and limits concurrency[4].   
 
 In the concept of concurrent revisions the guarantee of parallel executions being equivalent to some sequential schedule is relaxed. Instead, given the right abstractions, the programmer can reason about the execution directly. 
 
 This approach is data centric in a sense that it takes the complexity of synchronization out of the tasks and adds it to the data declarations.  
+
+\subsection{The contribution of Concurrent revisions}
+
+Much like transactional systems, Concurrent revisions use replication to ensure isolation. Because of that roll-back of aborted revisions comes for free. The guarantee of parallel executions being equivalent to some sequential schedule is relaxed. This increases parallelism and leaves to the programmer only to things to worry about - what has to be shared and how conflicts have to be resolved, concentrating any possible bugs in a limited region. With Concurrent revisions, given the right abstractions, the programmer can reason about the execution directly making the design of a concurrent system much natural.
+
+This approach is data centric in a sense that it takes the complexity of synchronization in terms of programmer effort out of the tasks and adds it to the data declarations. The runtime complexity of synchronization is shifted from blocking or checking that the schedule of tasks was legal into the join of tasks where conflicts are resolved by a deterministic computation.   
 
 \subsection{Applicable areas}
 Every system that is subject to a lot of conflicts typically has to limit the parallelism of its execution in order to ensure consistency and avoid conflicts. Concurrent revisions take the different approach of resolving conflicts instead of avoiding them by scheduling. This makes them suitable for problems where there are a lot of write-write conflicts which should be resolved deterministically and performance can be increased greatly by more parallelism. Some examples of applications that could benefit from concurrent revisions are: 
@@ -224,10 +243,178 @@ Every system that is subject to a lot of conflicts typically has to limit the pa
 {\bfseries Games} - They are a natural example when high parallelism is crucial for adequate performance. However, the fact that there are a lot of conflicts-user input, graphics rendering, simulating physics and logic, write-back to disk, makes getting their parallelization right tricky. Now what if we execute each of these tasks in separate revision and then join them as appropriate. There is one more concern of course - we have to be able to resolve conflicts. Luckily in order to do so, we simple have to define the merge function, which bundles all the complexity of dealing with conflicts into a single place, making it much more maintainable. Getting the merge function right is crucial, as we do not want our player to dash in a wall that was not displayed on the screen yet.
 
 \item
-{\bfseries Chat systems} - The usage of functional languages for large commercial systems is increasing. One example of that is the Facebook chat, which is written in Erlang. It is a large distributed system that has a lot of conflicts, timing and consistency are vital and it more or less requires 
-deterministic behaviour. This matches the list of requirements for suitability of concurrent revisions and we will see later that it is indeed convenient to write a chat server using them.
+{\bfseries Logging \& Chat systems} - The usage of functional languages for large commercial systems is increasing in large distributed systems such as logging and chat systems. One example of that is the Facebook chat, which is written in Erlang. Such systems are often large and distributed and have a lot of conflicts, timing and consistency are vital and it more or less requires deterministic behaviour. This matches the list of requirements for suitability of concurrent revisions and we will see later that it is indeed convenient to write a chat server using them.
 
 \end{itemize}
+
+\subsection{Why OCaml?}
+
+OCaml is functional programming language that is getting increasingly more popular both in academia and in the industry. The increasing amount of libraries for OCaml makes it an excellent choice for a variety of use cases. 
+
+As a functional language provides a natural means of tracking executions by the use of the type checker and the convenience of using immutable data types. Replication of complex immutable data structures in OCaml are very cheap, since no actual replication is done, but rather upon updates the structure of the old value is heavily reused, which makes updates cost only constant space.
+
+These features of OCaml makes it a very efficient environment for implementation of Concurrent Revisions.
+
+One down-side of OCaml is its limited parallelism. The run-time system is single threaded which means that there is only one parallel task ever in execution. There is no guarantee on the scheduling and interleaving of tasks which makes it non-trivial to writer parallel software in OCaml. Due to this fact, there is no performance improvement expected when using revisions. The key benefits of using revisions are better responsiveness at the cost of little overhead and decreased amount of effort required by the programmer.   
+
+\section{Quick overview of OCaml, the Core and Async libraries}
+OCaml is a garbage-collected functional language that also has object-oriented features.
+This section gives a brief overview of the features of OCaml used in the project.
+
+\subsection{Basic Types}
+As every functional language OCaml has a strong-type system that is incredibly useful in spotting bugs at compile type. The most heavily used types in OCaml are immutable. Here is an example of these:
+
+%let x = 1
+
+%let x = 2 in
+%  print_int(x)
+
+%let z = ("Hello", 1, 3.14)
+
+%let l = [1,2,3] 
+
+{\scriptsize\noindent\begin{longtable}{r|l}
+\mlcodeline{1}{\mlkeywordA{let}~x~\mlkeyword{=}~1
+}
+\mlcodeline{2}{
+}
+\mlcodeline{3}{\mlkeywordA{let}~x~\mlkeyword{=}~2~\mlkeywordA{in}
+}
+\mlcodeline{4}{~~print\_{}int(x)
+}
+\mlcodeline{5}{
+}
+\mlcodeline{6}{\mlkeywordA{let}~z~\mlkeyword{=}~(\mlstring{"Hello"}\mloperator{\mbox{,}}~1\mloperator{\mbox{,}}~3.14)
+}
+\mlcodeline{7}{
+}
+\mlcodeline{8}{\mlkeywordA{let}~l~\mlkeyword{=}~\mloperator{[}1\mloperator{\mbox{,}}2\mloperator{\mbox{,}}3\mloperator{]}
+}
+
+\end{longtable}
+}
+
+On line 1 the user declares the variable {\tt x} and assigns it the value of 1.  This value is immutable and cannot be assigned to again.  It can only be shadowed by another variable of the same name. The type checker resolves the type of {\tt x} as {\tt int}. The {\tt let} binding specifies the scope of the declaration. In this case the variable {\tt x} has a scope form line 1 to the end of the program. The {\tt let ... in} binding allows us to declare a scope for the variable. On line 3 you can see that {\tt x} is shadowed by another variable with scope until the end of line 4. There are also tuple data types, an example of which you can see on line 6. Here {\tt z} contains 3 values of different types. The type of z is {\tt string*int*float}. On line 8 we can see an example of a list. Lists in OCaml are implemented a single-linked lists and a pointer to the head of the lists. Which makes most access and update operations on list linear in time. Lists are also immutable. Updates reuse the structure of the old list and only replace the updated values, making them very space efficient.
+
+Another important set of types are the functional types. Here is an example:
+
+%let add a b = a + b
+
+%let rec factorial n = n * (factorial (n-1))  
+
+{\scriptsize\noindent\begin{longtable}{r|l}
+\mlcodeline{1}{\mlkeywordA{let}~add~a~b~\mlkeyword{=}~a~\mloperator{+}~b
+}
+\mlcodeline{2}{
+}
+\mlcodeline{3}{\mlkeywordA{let~rec}~factorial~n~\mlkeyword{=}~n~\mloperator{*}~(factorial~(n-1))~~}
+\end{longtable}
+} 
+
+The function {\tt add} is of type {\tt int -> int -> int}, takes two integer arguments and returns one integer result. The function factorial is a recursive function. Recursive is very important in functional languages as they are centered on the data structures, which are typically hierarchical, making it natural to operate on them in a recursive manner. OCaml can have functions from every OCaml type to every OCaml type as well as polymorphic functions.
+
+Other basic structures include variants and records:
+
+%type point2d = { x : float; y : float }
+
+%type option = None
+%             |Some of 'a 
+
+{\scriptsize\noindent\begin{longtable}{r|l}
+\mlcodeline{1}{\mlkeyword{type}~point~\mlkeyword{=}~\mloperator{\{}~x~\mloperator{\mbox{\COLON}}~float\mloperator{\mbox{\SC}}~y~\mloperator{\mbox{\COLON}}~float~\mloperator{\}}
+}
+\mlcodeline{2}{
+}
+\mlcodeline{3}{\mlkeyword{type}~option~\mlkeyword{=}~None
+}
+\mlcodeline{4}{~~~~~~~~~~~~~\mloperator{|}Some~\mlkeyword{of}~'a
+}
+\end{longtable}
+}
+Each variable of type {\tt point} has two fields {\tt y} and {\tt x} both of type integer. This is called record type. The type {\tt option} is a variant type. A variable of type {\tt option} can either be equal to {\tt None} or {\tt Some(x)}. Notice the type {\tt 'a} this specifies a polymorphic type meaning {\tt x} can be of any type.
+
+OCaml also has imperative features:
+
+%let x = ref 1
+
+%x := !x + 2 
+
+{\scriptsize\noindent\begin{longtable}{r|l}
+\mlcodeline{1}{\mlkeywordA{let}~x~\mlkeyword{=}~ref~1
+}
+\mlcodeline{2}{
+}
+\mlcodeline{3}{x~\mloperator{\mbox{\COLON}{}=}~\mloperator{\mbox{}\hspace{0pt}{!}\hspace{0pt}}x~\mloperator{+}~2~
+}
+\end{longtable}
+}
+
+Here {\tt x} is declared as a {\tt int ref} and is a reference to a particular place in memory. The value of {\tt x} itself cannot be changed. What can be changes of the value of the place where it points to. On line 3 {\tt x} is updated by assigning to it the sum of the dereferenced value of {\tt x} and 2.  
+
+
+\subsection{Complex data structures from the Core library}
+The Core library is a wrapper around the standard OCaml library that provides additional features. It this project I used the map and set data structures that are implemented as AVL trees. AVL tree is a self-balanced binary search tree that guarantees a logarithmic complexity for insertions, deletions and updates due to its balanced structure. Both these data structures are immutable, allowing them to share great proportion of their internal structure. This makes replication cheap both in terms of space and time.
+
+\subsection{Module system}
+The module system is a key feature of OCaml. It can be used to package together related definitions. For example one can package a particular data type together with the associated operations over that type and abstract away the actual implementation of that type. Here is an example of a simple module:
+
+%module Balance : sig
+%  type t
+%  val add: t -> t -> t
+%  val of_int: int -> t
+%end = struct
+%  type t = int
+%  let add a b = a + b
+%  let of_int x = x
+%end
+
+
+{\scriptsize\noindent\begin{longtable}{r|l}
+\mlcodeline{1}{\mlkeywordA{module}~Balance~\mloperator{\mbox{\COLON}}~\mlkeyword{sig}
+}
+\mlcodeline{2}{~~\mlkeyword{type}~t
+}
+\mlcodeline{3}{~~\mlkeyword{val}~add\mloperator{\mbox{\COLON}}~t~\mlkeyword{->}~t~\mlkeyword{->}~t
+}
+\mlcodeline{4}{~~\mlkeyword{val}~of\_{}int\mloperator{\mbox{\COLON}}~int~\mlkeyword{->}~t
+}
+\mlcodeline{5}{\mlkeyword{end}~\mlkeyword{=}~\mlkeyword{struct}
+}
+\mlcodeline{6}{~~\mlkeyword{type}~t~\mlkeyword{=}~int
+}
+\mlcodeline{7}{~~\mlkeywordA{let}~add~a~b~\mlkeyword{=}~a~\mloperator{+}~b
+}
+\mlcodeline{8}{~~\mlkeywordA{let}~of\_{}int~x~\mlkeyword{=}~x
+}
+\mlcodeline{9}{\mlkeyword{end}}
+\end{longtable}
+}
+Here from line 1 to 4 is declared the signature to the module {\tt Balance}. This is the interface available when using the module. The actual implementation of the module is from line 5 to 9. It has to comply to the signature of the module.
+
+A valuable feature when dealing with modules are the functors. Here is an example of using a functor:
+
+%module IntSet = 
+%   Set.Make(struct
+%             type t = int
+%             let compare x y = Int.compare x y
+%            end)
+
+{\scriptsize\noindent\begin{longtable}{r|l}
+\mlcodeline{1}{\mlkeywordA{module}~IntSet~\mlkeyword{=}~
+}
+\mlcodeline{2}{~~~\mlmodulename{Set}\mbox{}\mloperator{.}Make(\mlkeyword{struct}
+}
+\mlcodeline{3}{~~~~~~~~~~~~~\mlkeyword{type}~t~\mlkeyword{=}~int
+}
+\mlcodeline{4}{~~~~~~~~~~~~~\mlkeywordA{let}~compare~x~y~\mlkeyword{=}~\mlmodulename{Int}\mbox{}\mloperator{.}compare~x~y
+}
+\mlcodeline{5}{~~~~~~~~~~~~\mlkeyword{end})}
+\end{longtable}
+}
+
+Here I am using the build-in in Core functor {\tt Set.Make} to create a integer set. The functor expect a module with a signature that covers the type of the set elements, i.e {\tt t}, and the comparison function. Notice the use of the build-in function from the module {\tt Int} on line 4.
+
+\subsection{The Async concurrency library}
 
 
 \section{Deeper look into the concept}
@@ -630,7 +817,9 @@ It works! (or not)
 \begin{description}
 \item{[1]} \emph{Concurrent Programming with Revisions and Isolation Types}, Sebastian Burckhardt, Alexandro Baldassion, and Daan Leijen. OOPSLA'10
 \item{[2]} \emph{Source repository:} https://github.com/dpp23/ocaml\_revisions
-\item{[2]} \emph{Real World OCaml} Jason Hickey, Anil Madhavapeddy, and Yaron Minsky; O'Reilly 2013
+\item{[3]} \emph{Real World OCaml} Jason Hickey, Anil Madhavapeddy, and Yaron Minsky; O'Reilly 2013
+\item{[4]} \emph{Concurrency Control and Recovery in Database Systems. Addison-Wesley, 1987} P.A.Bernstein, V.Hadzilacos, and N.Goodman.
+
 \end{description}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
