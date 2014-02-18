@@ -412,10 +412,27 @@ A valuable feature when dealing with modules are the functors. Here is an exampl
 \end{longtable}
 }
 
-Here I am using the build-in in Core functor {\tt Set.Make} to create a integer set. The functor expect a module with a signature that covers the type of the set elements, i.e {\tt t}, and the comparison function. Notice the use of the build-in function from the module {\tt Int} on line 4.
+Here I am using the build-in in Core functor {\tt Set.Make} to create an integer set. The functor expect a module with a signature that requires the type of the set elements, i.e {\tt t}, and a comparison function between elements. Notice the use of the build-in function from the module {\tt Int} on line 4.
 
 \subsection{The Async concurrency library}
+The Async library was used as the exclusive source of parallelism throughout the project. Async is a monadic concurrency library. It is build around the idea of deferred computations that are scheduled non-deterministically. It has a global lock that ensures only one computation will be in execution at any given time. Each computation is executed atomically which guarantees two computations will never overlap. The most common pattern for programming with Async is to schedule new computations to be executed over the outputs of a previous computation once they are determined. This results in a guarantee for a sequence of actions to be performed in a particular order. Example taken from [3]:
 
+%Reader.file_contents filename
+%   >>| fun text ->
+%   List.length (String.split text ~on:'\n')  
+
+{\scriptsize\noindent\begin{longtable}{r|l}
+\mlcodeline{1}{\mlmodulename{Reader}\mbox{}\mloperator{.}file\_{}contents~filename
+}
+\mlcodeline{2}{~~~\mloperator{>\mbox{}>\mbox{}|}~\mlkeyword{fun}~text~\mlkeyword{->}
+}
+\mlcodeline{3}{~~~\mlmodulename{List}\mbox{}\mloperator{.}length~(\mlmodulename{String}\mbox{}\mloperator{.}split~text~\mloperator{\TI}on\mloperator{\mbox{\COLON}}'\mloperator{\BS}n')}
+\end{longtable}
+}
+
+Here on line 1 we schedule a deferred computation that reads the context of a file. On line 2 we bind it to a function that will be scheduled after the output of the read operation is determined, upon which it computes the number of lines in the file.
+
+This pattern can be used to overcome the problem of the blocking nature of reading and writing to streams, when they are respectively empty or full.
 
 \section{Deeper look into the concept}
 \subsection{Data structures \& Runtime behaviour }
