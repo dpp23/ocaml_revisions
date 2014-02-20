@@ -142,19 +142,23 @@ let merger a _ c = print_string "Merging... \n"; match c.last_event with
   |Register (name) -> begin match RepUser.find_by_name c.users name with
       |None -> raise (Horror("New user not found in joinee!"))
       |Some(us) ->
-        let user = {us with id = a.id + 1} in
-        print_string ("Registering " ^ name ^ " as " ^ (string_of_int user.id) ^ "\n");
-        Writer.write_sexp user.writer (sexp_of_command (Registered(user.id, name)));
-        RepUser.send_to_users a.users (Registered(user.id, name));
-        RepRoom.iter a.rooms (fun room -> 
-            print_string ("Inform about room " ^ (string_of_int room.id));
-            Writer.write_sexp user.writer 
-              (sexp_of_command (Room_announce(room.id))));
-        RepUser.iter a.users (fun u -> 
-            print_string ("Inform about user " ^ (string_of_int u.id));
-            Writer.write_sexp user.writer 
-              (sexp_of_command (User_announce(u.id, u.name))));
-        {a with users = RepUser.add a.users user; id = a.id+1}
+        begin match RepUser.find_by_name a.users name with
+          |Some(_) -> Writer.write_sexp us.writer (sexp_of_command ((Error("Username " ^ name ^ "is in use.")))); a
+          |None ->  
+            let user = {us with id = a.id + 1} in
+            print_string ("Registering " ^ name ^ " as " ^ (string_of_int user.id) ^ "\n");
+            Writer.write_sexp user.writer (sexp_of_command (Registered(user.id, name)));
+            RepUser.send_to_users a.users (Registered(user.id, name));
+            RepRoom.iter a.rooms (fun room -> 
+                print_string ("Inform about room " ^ (string_of_int room.id));
+                Writer.write_sexp user.writer 
+                  (sexp_of_command (Room_announce(room.id))));
+            RepUser.iter a.users (fun u -> 
+                print_string ("Inform about user " ^ (string_of_int u.id));
+                Writer.write_sexp user.writer 
+                  (sexp_of_command (User_announce(u.id, u.name))));
+            {a with users = RepUser.add a.users user; id = a.id+1}
+        end
     end
   |Message (m) -> begin match find_room_by_id a.rooms m.room_id with
       |None -> raise (Horror("Room not found at merging point in the global state!"))
