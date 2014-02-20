@@ -18,6 +18,7 @@ module RepMessage : sig
   val init: unit -> t
   val add: t -> a -> t
   val filter_by_time: t -> Time.t -> a list
+  val merge: t -> t -> t
 end =
 struct
   type a = message
@@ -27,6 +28,7 @@ struct
   let add l x = Map.add l x.timestamp x 
   let filter_by_time l time = let (_,v) = StdLabels.List.split (Map.to_alist (Map.filter l (fun ~key ~data:_-> (Time.compare key time) > -1 ))) in
     v
+  let merge a b = Map.merge a b (fun ~key:_ x -> match x with |`Left(m)|`Right(m)|`Both(m,_) -> Some(m))
 end
 
 module RepUser : sig
@@ -45,6 +47,7 @@ module RepUser : sig
   val iter: t -> (a -> unit) -> unit
   val map: t -> (a -> 'a) -> 'a list
   val exists_by_name: t -> string -> bool
+  val merge: t -> t -> t
 end =
 struct
   type a = user 
@@ -73,6 +76,10 @@ struct
   let exists_by_name (l:t) name = match find_by_name l name with
     |None -> false
     |_ -> true
+  let merge (a:t) (b:t) = Map.merge a b (fun ~key:_ x -> match x with
+      |`Left((u:a))|`Right((u:a)) -> print_int(u.id); Some(u)
+      |`Both((ul:a), (ur:a)) -> print_int(ul.id);if ul.su then Some(ul)
+        else Some(ur))
 end
 
 type chat_room = { history : RepMessage.t;
@@ -103,12 +110,11 @@ struct
   let exist l id = match find l id with
     |None -> false
     |_ -> true
-  let remove (l : t) id = Map.remove l id
+  let remove (l : t) id = Map.remove l id 
   let update (l : t) (x : a) = Map.add l x.id x                                         
   let iter (l:t) f = Map.iter l (fun ~key:_ ~data -> f data)
   let map (l:t) f = let (_,x) = StdLabels.List.split(Map.to_alist (Map.map l f)) in x
 end
-
 
 type st = {id:int; rooms: RepRoom.t; users: RepUser.t; last_event: command; last_event_time: Time.t} 
 let state = {id = 1; rooms = RepRoom.init(); users = RepUser.init(); last_event = Nop; last_event_time = Time.now()}
@@ -130,6 +136,8 @@ let exists_user_by_id l id = RepUser.exist l id
 
 let remove_user_by_id l id = RepUser.remove l id
 
+let remove_room_by_id l id = RepRoom.remove l id
+
 let update_room_by_id l n = RepRoom.update l n
 
 let update_user_by_id l n = RepUser.update l n
@@ -138,7 +146,7 @@ let update_user_by_id l n = RepUser.update l n
 let send_to_user_list l c = RepUser.send_to_users l c
 
 
-let merger a _ c = print_string "Merging... \n"; match c.last_event with
+let merger a _ c = print_string "Merging... \n"; print_string(Sexp.to_string_hum(sexp_of_command c.last_event)); match c.last_event with
   |Register (name) -> begin match RepUser.find_by_name c.users name with
       |None -> raise (Horror("New user not found in joinee!"))
       |Some(us) ->
@@ -202,7 +210,33 @@ let merger a _ c = print_string "Merging... \n"; match c.last_event with
           |(Some(_),_) -> a
         end
     end 
-  |Merge (_,_,_) -> raise (Horror("Not implemented")) (*TODO:implement*)
+  |Merge (u_id, r1_id, r2_id) -> 
+    print_string "MERGING MERGE \n";
+    let st = a in
+    begin match (find_user_by_id st.users u_id) with
+      |None -> print_string "NO USER \n"; a
+      |Some(user) -> 
+        let st = a in
+        match (find_room_by_id st.rooms r1_id, find_room_by_id st.rooms r2_id) with
+        |(None,_) | (_, None) -> Writer.write_sexp user.writer 
+                                   (sexp_of_command 
+                                      (Error("Error - Unknown room"))); a
+        |(Some(r1), Some(r2)) -> match (find_user_by_id r1.users u_id, find_user_by_id r2.users u_id) with
+          |(None,_)|(_,None) -> Writer.write_sexp user.writer 
+                                  (sexp_of_command 
+                                     (Error("Error - you are not in this room"))); a
+          |(Some(u1),Some(u2)) -> if (not (u1.su && u2.su)) then 
+              begin
+                Writer.write_sexp user.writer 
+                  (sexp_of_command 
+                     (Error("Error - you are not su in this room"))); a
+              end
+            else 
+              let new_room = {r1 with history = RepMessage.merge r1.history r2.history;
+                                      users = RepUser.merge r1.users r2.users} in
+              send_to_user_list new_room.users (Merge_announce(r1_id,r2_id, RepUser.map new_room.users user_to_user_local));                             
+              {a with rooms = update_room_by_id (remove_room_by_id a.rooms r2.id) new_room}
+    end
   |Create (room_id, id) -> begin match (find_room_by_id a.rooms room_id, find_room_by_id c.rooms room_id) with
       |(_,None) -> raise (Horror("Room not found at merging point in joinee!"))
       |(Some(_), _) -> begin match find_user_by_id a.users id with 
@@ -366,7 +400,9 @@ let handle_action rev iso action r w = print_string("handle action"); match acti
             SvRev.write rev iso 
               {st with rooms = rooms_; last_event = action;
                        last_event_time = Time.now()})
-
+  |Merge (_,_,_) -> 
+    SvRev.read rev iso 
+    >>| fun a -> SvRev.write rev iso {a with last_event = action; last_event_time = Time.now()} 
   | _ -> return rev 
 
 let check_action event rev iso _ w = 
@@ -468,7 +504,27 @@ let check_action event rev iso _ w =
                (Error("You are not in " ^ (string_of_int r_.id)))); Nop end
         else event
     end
-  | Merge (_,_,_) -> raise (Horror "Not implemented!")
+  | Merge (u_id, r1_id, r2_id) -> 
+    print_string("HIT \n");
+    begin match (find_user_by_id st.users u_id) with
+      |None -> Nop
+      |Some(user) -> 
+        match (find_room_by_id st.rooms r1_id, find_room_by_id st.rooms r1_id) with
+        |(None,_) | (_, None) -> Writer.write_sexp w 
+                                   (sexp_of_command 
+                                      (Error("Error - Unknown room"))); Nop
+        |(Some(r1), Some(r2)) -> match (find_user_by_id r1.users u_id, find_user_by_id r2.users u_id) with
+          |(None,_)|(_,None) -> Writer.write_sexp user.writer 
+                                  (sexp_of_command 
+                                     (Error("Error - you are not in this room"))); Nop
+          |(Some(u1),Some(u2)) -> if (not (u1.su && u2.su)) then 
+              begin
+                Writer.write_sexp user.writer 
+                  (sexp_of_command 
+                     (Error("Error - you are not su in this room"))); Nop
+              end
+            else Merge(u_id, r1_id, r2_id)
+    end        
   | _ -> Nop
 
 

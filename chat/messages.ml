@@ -32,6 +32,7 @@ type command = Register of string (*m*)
               |Room of int * (user_local list) (*r*)
               |Room_announce of int (*r*)
               |User_announce of int * string
+              |Merge_announce of int * int * (user_local list) 
               |Nop
               with sexp
 
