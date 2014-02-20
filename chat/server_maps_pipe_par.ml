@@ -469,44 +469,32 @@ let check_action event rev iso _ w =
 
 
 let rec process_queue iso = upon (Pipe.read pipe_reader) 
-  (function
-  | `Eof ->print_string("FAIL");  ()
-  | `Ok (action, r, w) -> 
-    print_string ("Read from Pipe");
-    upon (check_action action !staterev_ref iso r w)
     (function
-    |Nop -> process_queue iso
-    |action -> ignore(SvRev.fork !staterev_ref (fun rev -> handle_action rev iso action r w) 
-                      >>| fun rev -> ignore(Pipe.write pipe_fork_writer rev); print_string "put in fork pipe \n") ;
-               print_string "Forked \n";
-               process_queue iso))
+      | `Eof ->print_string("FAIL");  ()
+      | `Ok (action, r, w) -> 
+        print_string ("Read from Pipe");
+        upon (check_action action !staterev_ref iso r w)
+          (function
+            |Nop -> process_queue iso
+            |action -> ignore(SvRev.fork !staterev_ref (fun rev -> handle_action rev iso action r w) 
+                              >>| fun rev -> ignore(Pipe.write pipe_fork_writer (SvRev.determine_revision rev));
+                              print_string "put in fork pipe \n") ;
+              print_string "Forked \n";
+              process_queue iso))
 
 let rec process_joins () = upon (Pipe.read pipe_fork_reader)
-                           (function
-                             | `Eof ->print_string("FAIL fork pipe"); ()
-                             | `Ok (rev : SvRev.t) -> staterev_ref := (SvRev.join !staterev_ref rev); process_joins ()) 
-(*let rec process_joins () = print_string "Wait for fork to finish \n";
-                           if not (List.is_empty !forkList) then begin
-                             Deferred.any !forkList
-                             >>= fun rev -> 
-                              print_string "Process join";
-                              forkList := remove_from_list !forkList (return rev);
-                              staterev_ref := SvRev.join !staterev_ref rev;
-                              process_joins () 
-                              end
-                           else
-                             after (sec 1.0)
-                             >>= fun et -> process_joins et*)
-
+    (function
+      | `Eof ->print_string("FAIL fork pipe"); ()
+      | `Ok (rev : SvRev.t) -> staterev_ref := (SvRev.join !staterev_ref rev); process_joins ()) 
 
 let handle_to_pipe action r w  = print_string("handle fork"); ignore(Pipe.write pipe_writer (action, r, w));()
 
 let rec serve r w = print_string("Serving"); Reader.read_sexp r  
   >>=(function
-    | `Eof -> print_string("Connection broken?"); return ()
-    | `Ok s -> print_string("Read a sexp");
-      ignore(handle_to_pipe (command_of_sexp s) r w);
-      serve r w)
+      | `Eof -> print_string("Connection broken?"); return ()
+      | `Ok s -> print_string("Read a sexp");
+        ignore(handle_to_pipe (command_of_sexp s) r w);
+        serve r w)
 
 
 
