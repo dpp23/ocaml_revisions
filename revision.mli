@@ -25,6 +25,7 @@ module type Revision = sig
   val init: unit -> t
   val write: t -> isolated -> value -> t
   val read: t -> isolated -> value Deferred.t
+  val determine_revision: t -> t
 
 end
 

@@ -26,6 +26,7 @@ module type Revision = sig
   val init: unit -> t
   val write: t -> isolated -> value -> t
   val read: t -> isolated -> value Deferred.t
+  val determine_revision: t -> t
 
 end
 
@@ -107,5 +108,6 @@ module Make(X:Isolatable) : (Revision with type value = X.t and type isolated = 
                 }
   let get_revision (res : result) = res >>| fun (a, _) -> a
   let get_isolated (res : result) = res >>| fun (_, b) -> b
+  let determine_revision r = r >>| (fun i -> i)
 
 end

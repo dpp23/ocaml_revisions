@@ -22,13 +22,15 @@ module RepMessage : sig
 end =
 struct
   type a = message
-  type t = ((Time.t, message, Time.comparator) Map.t)
+  type t = message list
 
-  let init () = Map.empty ~comparator:Time.comparator
-  let add l x = Map.add l x.timestamp x 
-  let filter_by_time l time = let (_,v) = StdLabels.List.split (Map.to_alist (Map.filter l (fun ~key ~data:_-> (Time.compare key time) > -1 ))) in
-    v
-  let merge a b = Map.merge a b (fun ~key:_ x -> match x with |`Left(m)|`Right(m)|`Both(m,_) -> Some(m))
+  let init () = []
+  let add l x = add_to_list l x (fun x y -> Time.compare x.timestamp y.timestamp)
+  let rec filter_by_time l time = match l with
+    |[] -> []
+    |x::xs -> if(Time.compare x.timestamp time > -1) then x::(filter_by_time xs time)
+      else []
+  let merge a b = List.sort (fun a b -> Time.compare a.timestamp b.timestamp) (a @ b)
 end
 
 module RepUser : sig
@@ -51,35 +53,39 @@ module RepUser : sig
 end =
 struct
   type a = user 
-  type t = ((int, user, Int.comparator) Map.t)
+  type t = user list
 
-  let init () = Map.empty ~comparator:Int.comparator
-  let is_empty l = Map.is_empty l
-  let add (l : t) (x : a) = Map.add l x.id x 
-  let find (l : t) id = Map.find l id 
+  let init () = []
+  let is_empty = List.is_empty 
+  let add l x = x::l
+  let find (l : t) id = List.find l (fun x -> x.id = id)
   let exist l id = match find l id with
     |None -> false
     |_ -> true
-  let remove (l : t) id = Map.remove l id
-  let send_to_users l c = Map.iter l (fun ~key:_ ~data:x -> Writer.write_sexp x.writer (sexp_of_command c))
-  let update (l : t) (x : a) = Map.add l x.id x
-  let find_by_name (l : t) (name : string) =let (_,x) = StdLabels.List.split (Map.to_alist l) in 
-    let rec find l name =  match l with
-      |[] -> None
-      |y::ys -> if y.name = name then Some(y)
-        else find ys name
-    in
-    find x name
+  let rec remove (l : t) id = match l with
+    |[] -> l
+    |x::xs -> if x.id = id then xs
+      else x::(remove xs id)
+  let send_to_users l c = List.iter l (fun x -> Writer.write_sexp x.writer (sexp_of_command c))
+  let rec update (l : t) (x : a) = match l with
+    |[] -> []
+    |k::ks -> if x.id = k.id then x::ks
+      else k::(update ks x)
+  let rec find_by_name (l : t) name = match l with
+    |[] -> None
+    |y::ys -> if y.name = name then Some(y)
+      else find_by_name ys name
 
-  let iter (l:t) f = Map.iter l (fun ~key:_ ~data -> f data)
-  let map (l:t) f = let (_,x) = StdLabels.List.split(Map.to_alist (Map.map l f)) in x
+  let iter (l:t) f = List.iter l f
+  let map (l:t) f = List.map l f
   let exists_by_name (l:t) name = match find_by_name l name with
     |None -> false
     |_ -> true
-  let merge (a:t) (b:t) = Map.merge a b (fun ~key:_ x -> match x with
-      |`Left((u:a))|`Right((u:a)) -> print_int(u.id); Some(u)
-      |`Both((ul:a), (ur:a)) -> print_int(ul.id);if ul.su then Some(ul)
-        else Some(ur))
+  let rec merge (a:t) (b:t) = match a with
+    |[] -> b
+    |x::xs -> match find b x.id with
+      |None -> x::(merge xs b)
+      |Some(y) -> {x with su = (x.su || y.su)}::(merge xs (remove b y.id))
 end
 
 type chat_room = { history : RepMessage.t;
@@ -102,23 +108,29 @@ module RepRoom : sig
 end =
 struct
   type a = chat_room
-  type t = ((int, chat_room, Int.comparator) Map.t)
+  type t = chat_room list
 
-  let init () = Map.empty ~comparator:Int.comparator
-  let add (l : t) (x : a) = Map.add l x.id x 
-  let find (l : t) id = Map.find l id 
+  let init () = []
+  let add l x = x::l
+  let find l id = List.find l (fun (x:chat_room) -> x.id = id)
   let exist l id = match find l id with
     |None -> false
     |_ -> true
-  let remove (l : t) id = Map.remove l id 
-  let update (l : t) (x : a) = Map.add l x.id x                                         
-  let iter (l:t) f = Map.iter l (fun ~key:_ ~data -> f data)
-  let map (l:t) f = let (_,x) = StdLabels.List.split(Map.to_alist (Map.map l f)) in x
+  let rec remove l id = match l with
+    |[] -> l
+    |x::xs -> if x.id = id then xs
+      else x::(remove xs id)
+  let rec update l x = match l with
+    |[] -> []
+    |k::ks -> if x.id = k.id then x::ks
+      else k::(update ks x)
+  let iter l f = List.iter l f
+  let map l f = List.map l f
 end
 
 
 type st = {id:int; rooms: RepRoom.t; users: RepUser.t; last_event: command; last_event_time: Time.t} 
-let state = ref {id = 1; rooms = RepRoom.init(); users = RepUser.init(); last_event = Nop; last_event_time = Time.now()}
+let state = {id = 1; rooms = RepRoom.init(); users = RepUser.init(); last_event = Nop; last_event_time = Time.now()}
 
 
 let (pipe_reader, pipe_writer) = Pipe.create()
@@ -147,23 +159,27 @@ let update_user_by_id l n = RepUser.update l n
 let send_to_user_list l c = RepUser.send_to_users l c
 
 
-let merger a _ c = match c.last_event with
+let merger a _ c = print_string "Merging... \n"; print_string(Sexp.to_string_hum(sexp_of_command c.last_event)); match c.last_event with
   |Register (name) -> begin match RepUser.find_by_name c.users name with
       |None -> raise (Horror("New user not found in joinee!"))
       |Some(us) ->
-        let user = {us with id = a.id + 1} in
-        print_string ("Registering " ^ name ^ " as " ^ (string_of_int user.id) ^ "\n");
-        Writer.write_sexp user.writer (sexp_of_command (Registered(user.id, name)));
-        RepUser.send_to_users a.users (Registered(user.id, name));
-        RepRoom.iter a.rooms (fun room -> 
-            print_string ("Inform about room " ^ (string_of_int room.id));
-            Writer.write_sexp user.writer 
-              (sexp_of_command (Room_announce(room.id))));
-        RepUser.iter a.users (fun u -> 
-            print_string ("Inform about user " ^ (string_of_int u.id));
-            Writer.write_sexp user.writer 
-              (sexp_of_command (User_announce(u.id, u.name))));
-        {a with users = RepUser.add a.users user; id = a.id+1}
+        begin match RepUser.find_by_name a.users name with
+          |Some(_) -> Writer.write_sexp us.writer (sexp_of_command ((Error("Username " ^ name ^ "is in use.")))); a
+          |None ->  
+            let user = {us with id = a.id + 1} in
+            print_string ("Registering " ^ name ^ " as " ^ (string_of_int user.id) ^ "\n");
+            Writer.write_sexp user.writer (sexp_of_command (Registered(user.id, name)));
+            RepUser.send_to_users a.users (Registered(user.id, name));
+            RepRoom.iter a.rooms (fun room -> 
+                print_string ("Inform about room " ^ (string_of_int room.id));
+                Writer.write_sexp user.writer 
+                  (sexp_of_command (Room_announce(room.id))));
+            RepUser.iter a.users (fun u -> 
+                print_string ("Inform about user " ^ (string_of_int u.id));
+                Writer.write_sexp user.writer 
+                  (sexp_of_command (User_announce(u.id, u.name))));
+            {a with users = RepUser.add a.users user; id = a.id+1}
+        end
     end
   |Message (m) -> begin match find_room_by_id a.rooms m.room_id with
       |None -> raise (Horror("Room not found at merging point in the global state!"))
@@ -194,7 +210,7 @@ let merger a _ c = match c.last_event with
       |(_,None) -> raise (Horror("Room not found at merging point in joinee!"))
       |(None,_) -> a
       |(Some(a_room), Some(c_room)) ->begin match (find_user_by_id a_room.users id, find_user_by_id c_room.users id) with
-          |(None, Some(user)) -> print_int(user.id);
+          |(None, Some(user)) ->
             send_to_user_list a_room.users (Enter(room_id, id));
             Writer.write_sexp user.writer 
               (sexp_of_command (Room(a_room.id, RepUser.map (RepUser.add a_room.users user)      
@@ -251,140 +267,160 @@ let merger a _ c = match c.last_event with
 
 
 
+module ServerRevision = Revision.Make(struct 
+    type t = st
+    let merge a b c = merger a b c 
+  end)
+
+module SvRev = ServerRevision
+
+let res = SvRev.create (SvRev.init()) state
+
+let (pipe_fork_reader, pipe_fork_writer) = Pipe.create()
+
+let staterev_ref = ref (SvRev.get_revision res)
+let iso = SvRev.get_isolated res
+(*let forkList = ref []*)
 
 
 
-
-let handle_action action r w = print_string("handle action"); match action with
+let handle_action rev iso action r w = print_string("handle action"); match action with
   | Register (name) -> 
-    let st = !state in 
-    {st with users =
-               (RepUser.add st.users  
-                  {id = st.id; 
-                   name = name;
-                   su = false;
-                   writer = w;
-                   reader = r;
-                  });
-             id = st.id+1;
-             last_event = action;
-             last_event_time = Time.now()}
+    SvRev.read rev iso 
+    >>| fun st -> SvRev.write rev iso 
+      {st with users =
+                 (RepUser.add st.users  
+                    {id = st.id; 
+                     name = name;
+                     su = false;
+                     writer = w;
+                     reader = r;
+                    });
+               id = st.id+1;
+               last_event = action;
+               last_event_time = Time.now()}
   | Create (room_id, _) ->
-    let st = !state in
-    {st with rooms = RepRoom.add st.rooms 
-                 { id = room_id;
-                   users = RepUser.init();    
-                   history = RepMessage.init();
-                 };
-             last_event = action;
-             last_event_time = Time.now()
-    }
+    SvRev.read rev iso 
+    >>| fun st -> SvRev.write rev iso 
+      {st with rooms = RepRoom.add st.rooms 
+                   { id = room_id;
+                     users = RepUser.init();    
+                     history = RepMessage.init();
+                   };
+               last_event = action;
+               last_event_time = Time.now()
+      }
   | Enter (room_id, id) -> 
-    let st = !state in
-    begin match (find_user_by_id st.users id, find_room_by_id st.rooms room_id) with
-      |(None,_) -> 
-        Writer.write_sexp w 
-          (sexp_of_command 
-             (Error("Unknown user " ^ (string_of_int id)))); !state
-      |(_, None) ->
-        Writer.write_sexp w 
-          (sexp_of_command 
-             (Error("Unknown room " ^ (string_of_int room_id)))); !state
-      |(Some(u),Some(r)) -> 
-        if exists_user_by_id r.users u.id then begin
+    SvRev.read rev iso 
+    >>| (fun st -> match (find_user_by_id st.users id, find_room_by_id st.rooms room_id) with
+        |(None,_) -> 
           Writer.write_sexp w 
             (sexp_of_command 
-               (Error("You are already in " ^ (string_of_int room_id)))); !state end
-        else 
-          let rooms_ = update_room_by_id st.rooms 
-              {r with users = RepUser.add r.users {u with su = (RepUser.is_empty r.users)} } in 
-          {st with rooms = rooms_; last_event = action;
-                   last_event_time = Time.now()}
-    end
+               (Error("Unknown user " ^ (string_of_int id)))); rev
+        |(_, None) ->
+          Writer.write_sexp w 
+            (sexp_of_command 
+               (Error("Unknown room " ^ (string_of_int room_id)))); rev
+        |(Some(u),Some(r)) -> 
+          if exists_user_by_id r.users u.id then begin
+            Writer.write_sexp w 
+              (sexp_of_command 
+                 (Error("You are already in " ^ (string_of_int room_id)))); rev end
+          else 
+            let rooms_ = update_room_by_id st.rooms 
+                {r with users = RepUser.add r.users {u with su = (RepUser.is_empty r.users)} } in
+            SvRev.write rev iso 
+              {st with rooms = rooms_; last_event = action;
+                       last_event_time = Time.now()})
   | Leave (room_id, id) -> 
-    let st = !state in
-    begin match (find_user_by_id st.users id, find_room_by_id st.rooms room_id) with
-      |(None,_) -> 
-        Writer.write_sexp w 
-          (sexp_of_command 
-             (Error("Unknown user " ^ (string_of_int id)))); !state
-      |(_, None) ->
-        Writer.write_sexp w 
-          (sexp_of_command 
-             (Error("Unknown room " ^ (string_of_int room_id)))); !state
-      |(Some(u),Some(r)) -> 
-        if  not (exists_user_by_id r.users u.id) then begin
+    SvRev.read rev iso 
+    >>| (fun st -> match (find_user_by_id st.users id, find_room_by_id st.rooms room_id) with
+        |(None,_) -> 
           Writer.write_sexp w 
             (sexp_of_command 
-               (Error("You are not in " ^ (string_of_int room_id)))); !state end
-        else 
-          let rooms_ = update_room_by_id st.rooms 
-              {r with users = remove_user_by_id r.users u.id} in
-          {st with rooms = rooms_; last_event = action;
-                   last_event_time = Time.now()}
-    end
+               (Error("Unknown user " ^ (string_of_int id)))); rev
+        |(_, None) ->
+          Writer.write_sexp w 
+            (sexp_of_command 
+               (Error("Unknown room " ^ (string_of_int room_id)))); rev
+        |(Some(u),Some(r)) -> 
+          if  not (exists_user_by_id r.users u.id) then begin
+            Writer.write_sexp w 
+              (sexp_of_command 
+                 (Error("You are not in " ^ (string_of_int room_id)))); rev end
+          else 
+            let rooms_ = update_room_by_id st.rooms 
+                {r with users = remove_user_by_id r.users u.id} in
+            SvRev.write rev iso 
+              {st with rooms = rooms_; last_event = action;
+                       last_event_time = Time.now()})
   |Promote(admin_id, user_id, room_id) -> 
-    let st = !state in
-    begin match (find_user_by_id st.users admin_id, find_user_by_id st.users user_id,
-                 find_room_by_id st.rooms room_id) with
-    |(None,_,_) -> 
-      Writer.write_sexp w 
-        (sexp_of_command 
-           (Error("Unknown user " ^ (string_of_int admin_id)))); !state
-    |(_,None,_) -> 
-      Writer.write_sexp w 
-        (sexp_of_command 
-           (Error("Unknown user " ^ (string_of_int user_id)))); !state
-    |(_, _, None) ->
-      Writer.write_sexp w 
-        (sexp_of_command 
-           (Error("Unknown room " ^ (string_of_int room_id)))); !state
-    |(Some(a), Some(u),Some(r)) -> 
-      match find_user_by_id r.users a.id with
-      |None ->
-        Writer.write_sexp w 
-          (sexp_of_command 
-             (Error("You are not in " ^ (string_of_int room_id)))); !state
-      |Some(admin) -> if not (admin.su) then begin 
+    SvRev.read rev iso 
+    >>| (fun st -> match (find_user_by_id st.users admin_id, find_user_by_id st.users user_id,
+                          find_room_by_id st.rooms room_id) with
+        |(None,_,_) -> 
           Writer.write_sexp w 
             (sexp_of_command 
-               (Error("You are not su in " ^ (string_of_int room_id)))); !state end
-        else match find_user_by_id r.users u.id with
+               (Error("Unknown user " ^ (string_of_int admin_id)))); rev
+        |(_,None,_) -> 
+          Writer.write_sexp w 
+            (sexp_of_command 
+               (Error("Unknown user " ^ (string_of_int user_id)))); rev
+        |(_, _, None) ->
+          Writer.write_sexp w 
+            (sexp_of_command 
+               (Error("Unknown room " ^ (string_of_int room_id)))); rev
+        |(Some(a), Some(u),Some(r)) -> 
+          match find_user_by_id r.users a.id with
           |None ->
             Writer.write_sexp w 
               (sexp_of_command 
-                 (Error("User " ^ (string_of_int u.id) ^ "is not in"  ^ (string_of_int room_id)))); !state
-          |Some(user) ->
-            let users_ = update_user_by_id r.users {user with su = true} in              
-            let rooms_ = update_room_by_id st.rooms 
-                {r with users = users_} in
-            {st with rooms = rooms_;
-                     last_event = action; 
-                     last_event_time = Time.now()}
-    end
+                 (Error("You are not in " ^ (string_of_int room_id)))); rev
+          |Some(admin) -> if not (admin.su) then begin 
+              Writer.write_sexp w 
+                (sexp_of_command 
+                   (Error("You are not su in " ^ (string_of_int room_id)))); rev end
+            else match find_user_by_id r.users u.id with
+              |None ->
+                Writer.write_sexp w 
+                  (sexp_of_command 
+                     (Error("User " ^ (string_of_int u.id) ^ "is not in"  ^ (string_of_int room_id)))); rev
+              |Some(user) ->
+                let users_ = update_user_by_id r.users {user with su = true} in              
+                let rooms_ = update_room_by_id st.rooms 
+                    {r with users = users_} in
+                SvRev.write rev iso 
+                  {st with rooms = rooms_;
+                           last_event = action; 
+                           last_event_time = Time.now()})
+
+
   | Message (m) -> 
-    let st = !state in
-    begin match (find_room_by_id st.rooms m.room_id) with
-      |None -> 
-        Writer.write_sexp w 
-          (sexp_of_command 
-             (Error("Unknown room " ^  (string_of_int m.room_id)))); !state
-      |Some(r) -> 
-        if not (exists_user_by_id r.users m.user_id) then begin
+    SvRev.read rev iso 
+    >>| (fun st -> match (find_room_by_id st.rooms m.room_id) with
+        |None -> 
           Writer.write_sexp w 
             (sexp_of_command 
-               (Error("You are not in " ^ (string_of_int r.id)))); !state end
-        else 
-          let rooms_ = update_room_by_id st.rooms 
-              {r with history = RepMessage.add r.history {m with timestamp = Time.now()}} in 
-          {st with rooms = rooms_; last_event = action;
-                   last_event_time = Time.now()}
-    end
-  |Merge (_,_,_) -> {!state with last_event = action; last_event_time = Time.now()} 
-  | _ -> !state 
+               (Error("Unknown room " ^  (string_of_int m.room_id)))); rev
+        |Some(r) -> 
+          if not (exists_user_by_id r.users m.user_id) then begin
+            Writer.write_sexp w 
+              (sexp_of_command 
+                 (Error("You are not in " ^ (string_of_int r.id)))); rev end
+          else 
+            let rooms_ = update_room_by_id st.rooms 
+                {r with history = RepMessage.add r.history {m with timestamp = Time.now()}} in
+            SvRev.write rev iso 
+              {st with rooms = rooms_; last_event = action;
+                       last_event_time = Time.now()})
+  |Merge (_,_,_) -> 
+    SvRev.read rev iso 
+    >>| fun a -> SvRev.write rev iso {a with last_event = action; last_event_time = Time.now()} 
+  | _ -> return rev 
 
-let check_action event _ w = 
-  let st = !state in 
+let check_action event rev iso _ w = 
+  SvRev.read rev iso 
+  >>|fun st -> 
   match event with
   | Register (name) -> 
     if RepUser.exists_by_name st.users name then begin 
@@ -482,6 +518,7 @@ let check_action event _ w =
         else event
     end
   | Merge (u_id, r1_id, r2_id) -> 
+    print_string("HIT \n");
     begin match (find_user_by_id st.users u_id) with
       |None -> Nop
       |Some(user) -> 
@@ -504,28 +541,33 @@ let check_action event _ w =
   | _ -> Nop
 
 
-let rec process_queue () = Pipe.read pipe_reader 
-  >>= function
-  | `Eof ->print_string("FAIL"); return ()
-  | `Ok (action, r, w) -> 
-    print_string ("Read from Pipe");
-    match check_action action r w with
-    |Nop -> process_queue ()
-    |action -> 
-      state := merger (!state) (!state) (handle_action action r w);
-      process_queue () 
+let rec process_queue iso = upon (Pipe.read pipe_reader) 
+    (function
+      | `Eof ->print_string("FAIL");  ()
+      | `Ok (action, r, w) -> 
+        print_string ("Read from Pipe");
+        upon (check_action action !staterev_ref iso r w)
+          (function
+            |Nop -> process_queue iso
+            |action -> ignore(SvRev.fork !staterev_ref (fun rev -> handle_action rev iso action r w) 
+                              >>| fun rev -> ignore(Pipe.write pipe_fork_writer (SvRev.determine_revision rev));
+                              print_string "put in fork pipe \n") ;
+              print_string "Forked \n";
+              process_queue iso))
 
-
-
+let rec process_joins () = upon (Pipe.read pipe_fork_reader)
+    (function
+      | `Eof ->print_string("FAIL fork pipe"); ()
+      | `Ok (rev : SvRev.t) -> staterev_ref := (SvRev.join !staterev_ref rev); process_joins ()) 
 
 let handle_to_pipe action r w  = print_string("handle fork"); ignore(Pipe.write pipe_writer (action, r, w));()
 
-let rec serve r w = print_string("Serving"); Reader.read_sexp r >>= 
-  (function
-    | `Eof -> print_string("Connection broken?"); return ()
-    | `Ok s -> print_string("Read a sexp");
-      ignore(handle_to_pipe (command_of_sexp s) r w);
-      serve r w)
+let rec serve r w = print_string("Serving"); Reader.read_sexp r  
+  >>=(function
+      | `Eof -> print_string("Connection broken?"); return ()
+      | `Ok s -> print_string("Read a sexp");
+        ignore(handle_to_pipe (command_of_sexp s) r w);
+        serve r w)
 
 
 
@@ -537,7 +579,8 @@ let run ~port =
       (fun _ r w -> serve r w)
   in
   ignore (host_and_port : (Socket.Address.Inet.t, int) Tcp.Server.t Deferred.t);
-  ignore (process_queue ()); 
+  ignore (process_queue iso);
+  ignore (process_joins ());
   never_returns(Scheduler.go())
 
 let () =

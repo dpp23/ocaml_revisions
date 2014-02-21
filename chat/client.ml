@@ -78,6 +78,11 @@ let print_message (m:message) =  let pretty_print name = print_string((Time.to_s
   |None -> pretty_print "Unknown"
   |Some(u) -> pretty_print u.name
 
+let rec remove_from_list l x = match l with 
+                               |[] -> []
+                               |y::ys -> if y=x then ys
+                                         else y::(remove_from_list ys x)
+
 let rec print_n_messages l n = match l with
   |[] -> ()
   |(x::xs) -> print_n_messages xs (n-1); print_message x
@@ -198,7 +203,23 @@ let handle c = match c with
                                                               update_user_by_id room.users {user with su = true}})
         end
     end
-  |Merge(_,_,_) -> () (*TODO*)
+  |Merge_announce(r1_id,r2_id, users) -> print_string ("Merging rooms: " ^
+                                         string_of_int(r1_id) ^ " and " ^ string_of_int(r2_id) ^ "\n");
+                                         begin match (find_room_by_id !rooms r1_id, find_room_by_id !rooms r2_id) with
+                                           |(None,None)-> print_string ("Error! Server wants to merge two unknown groups: " ^
+                                                          string_of_int(r1_id) ^ " and " ^ string_of_int(r2_id) ^ "\n");
+                                           |(Some(r),_)-> print_string ("Users in room " ^ string_of_int(r1_id) ^ " :\n");
+                                                              List.iter users (fun u -> print_string (u.name ^ " ");print_int(u.id); print_string "\n");
+                                                              let rs = remove_room_by_id !rooms r2_id in
+                                                              rooms := update_room_by_id rs ({r with users = users});
+                                                              room_ids := remove_from_list !room_ids r2_id  
+                                           |(None, Some(r)) ->  print_string ("Users in room " ^ string_of_int(r1_id) ^ " :\n");
+                                                              List.iter users (fun u -> print_string (u.name ^ " ");print_int(u.id); print_string "\n");
+                                                              let rs = remove_room_by_id !rooms r2_id in
+                                                              rooms := {r with users = users; id = r1_id}::rs;
+                                                              room_ids := remove_from_list !room_ids r2_id  
+                                         end
+    
   |Create(room_id, _) -> begin match List.find !room_ids (fun id -> id = room_id) with
       |None -> print_string("New room created. Room id: " ^ (string_of_int room_id) ^ "\n");
         room_ids := room_id::!room_ids
