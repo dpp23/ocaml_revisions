@@ -566,34 +566,36 @@ Not all possible joins are legal as some of them might invalidate the assumption
 \\Fig.2: Illegal revision diagrams.
 \vspace{10pt}
 
-In Fig.2 we can see two illegal revision diagrams. In the first one, we join revision 3 to revision 1 before we have joined revision 2 which is the parent revision of 3. This means that the result in revision 5 might not be what we would expect as we are interleaving the joins and we might merge the work done in 2 effectively twice.
+In Fig.2 we can see two illegal revision diagrams. In the first one, we join revision 3 to revision 1 before we have joined revision 2 which is the parent revision of 3. This means that the result in revision 5 might not be what we would expect since it is unknown how much of the work done in the fork for revision was done before forking revision 3. When we join 2, some of the changes occurring (which might have subsequently been modified) in 2 are already joined when 3 was joined. Since the merge function cannot account for such an interleaving as it is chosen by the programmer arbitrarily, such a revision diagram is not valid. One can imagine a more complex concept that this is accounted for at the time of the join. However this would require significantly more programming effort when designing the merge function. This would result in more difficult to reason about concept, prone to programming error, without adding extra functionality, because the legal revision diagrams area already expressive enough. 
 
-In the second example, we are interleaving two separate flows of revisions and there is no way to ensure that they isolate a similar state.
+In the second example, we are interleaving two separate flows of revisions and there is no way to ensure that they isolate a similar state. This is completely meaningless, since they could isolate different variables and represent unrelated states.
 
 \subsection{Concurrent revisions in the world of OCaml}
 The OCaml implementation of Concurrent Revisions is presented in chapter 3. One of its advantages over the C\# implementation is that it is purely functional and the type checker catches some of the typical mistakes that can be made - trying to access an isolated of a wrong type or join revisions of different types. What it does not do however is check for all types of illegal revision diagrams, instead an exception is raised whenever a illegal join is performed. This is far from ideal and statically type-checking joins for compatibility could be implemented as a future extension.
 
 The API that the implementation exposes to the user is intuitive and resembles the typical OCaml approach for APIs for external libraries. Here is a simple example of its usage:
+\begin{comment}
+module IntRevision = Make(struct
+    type t = int
+    let merge head parent current = head + current - parent
+  end)
 
-%module IntRevision = Make(struct
-%    type t = int
-%    let merge head parent current = head + current - parent
-%  end)
+let () =
+  let r = IntRevision.init () in
+  let res1 = IntRevision.create r 0 in
+  let revision = IntRevision.get_revision res1 
+   and account = IntRevision.get_isolated res1 in
+     Deferred.both 
+      (IntRevision.fork revision 
+        (fun r -> return (IntRevision.write r account ((IntRevision.read r account) + 5)))
+      (IntRevision.fork revision 
+        (fun r -> return (IntRevision.write r account ((IntRevision.read r account) + 10)))
+     >>|(fun (rev1, rev2 ->
+        let join_rev1 = IntRevision.join revision rev1 in
+        let join_rev2 = Intrevision.join join_rev1 rev2 in
+          assert(IntRevision.read join_rev2 = 15)  
+\end{comment}
 
-%let () =
-%  let r = IntRevision.init () in
-%  let res1 = IntRevision.create r 0 in
-%  let revision = IntRevision.get_revision res1 
-%5  and account = IntRevision.get_isolated res1 in
-%     Deferred.both (IntRevision.fork revision 
-%        (fun r -> return (IntRevision.write r account ((IntRevision.read r account) + 5)))
-%                   (IntRevision.fork revision 
-%                      (fun r -> return (IntRevision.write r account ((IntRevision.read r account) + 10)))
-%     >>|(fun (rev1, rev2 ->
-%        let join_rev1 = IntRevision.join revision rev1 in
-%        let join_rev2 = Intrevision.join join_rev1 rev2 in
-%          assert(IntRevision.read join_rev2 = 15)  
-\newpage
 
 {\scriptsize\noindent\begin{longtable}{r|l}
 \mlcodeline{1}{\mlkeywordA{module}~IntRevision~\mlkeyword{=}~Make(\mlkeyword{struct}
@@ -614,32 +616,33 @@ The API that the implementation exposes to the user is intuitive and resembles t
 }
 \mlcodeline{9}{~~\mlkeywordA{let}~revision~\mlkeyword{=}~\mlmodulename{IntRevision}\mbox{}\mloperator{.}get\_{}revision~res1~
 }
-\mlcodeline{10}{~~\mlkeywordA{and}~account~\mlkeyword{=}~\mlmodulename{IntRevision}\mbox{}\mloperator{.}get\_{}isolated~res1~\mlkeywordA{in}
+\mlcodeline{10}{~~~\mlkeywordA{and}~account~\mlkeyword{=}~\mlmodulename{IntRevision}\mbox{}\mloperator{.}get\_{}isolated~res1~\mlkeywordA{in}
 }
-\mlcodeline{11}{~~~~~\mlmodulename{Deferred}\mbox{}\mloperator{.}both~(\mlmodulename{IntRevision}\mbox{}\mloperator{.}fork~revision~
+\mlcodeline{11}{~~~~~\mlmodulename{Deferred}\mbox{}\mloperator{.}both~
 }
-\mlcodeline{12}{~~~~~~~~~~~~~~~~~~~~~(\mlkeyword{fun}~r~\mlkeyword{->}~return~(\mlmodulename{IntRevision}\mbox{}\mloperator{.}write~r~account~((\mlmodulename{IntRevision}\mbox{}\mloperator{.}read~r~account)~\mloperator{+}~5)))
+\mlcodeline{12}{~~~~~~(\mlmodulename{IntRevision}\mbox{}\mloperator{.}fork~revision~
 }
-\mlcodeline{13}{~~~~~~~~~~~~~~~~~~~(\mlmodulename{IntRevision}\mbox{}\mloperator{.}fork~revision~
+\mlcodeline{13}{~~~~~~~~(\mlkeyword{fun}~r~\mlkeyword{->}~return~(\mlmodulename{IntRevision}\mbox{}\mloperator{.}write~r~account~((\mlmodulename{IntRevision}\mbox{}\mloperator{.}read~r~account)~\mloperator{+}~5)))
 }
-\mlcodeline{14}{~~~~~~~~~~~~~~~~~~~~~(\mlkeyword{fun}~r~\mlkeyword{->}~return~(\mlmodulename{IntRevision}\mbox{}\mloperator{.}write~r~account~((\mlmodulename{IntRevision}\mbox{}\mloperator{.}read~r~account)~\mloperator{+}~10)))
+\mlcodeline{14}{~~~~~~(\mlmodulename{IntRevision}\mbox{}\mloperator{.}fork~revision~
 }
-\mlcodeline{15}{~~~~~\mloperator{>\mbox{}>\mbox{}|}(\mlkeyword{fun}~(rev1\mloperator{\mbox{,}}~rev2~\mlkeyword{->}
+\mlcodeline{15}{~~~~~~~~(\mlkeyword{fun}~r~\mlkeyword{->}~return~(\mlmodulename{IntRevision}\mbox{}\mloperator{.}write~r~account~((\mlmodulename{IntRevision}\mbox{}\mloperator{.}read~r~account)~\mloperator{+}~10)))
 }
-\mlcodeline{16}{~~~~~~~~\mlkeywordA{let}~join\_{}rev1~\mlkeyword{=}~\mlmodulename{IntRevision}\mbox{}\mloperator{.}join~revision~rev1~\mlkeywordA{in}
+\mlcodeline{16}{~~~~~\mloperator{>\mbox{}>\mbox{}|}(\mlkeyword{fun}~(rev1\mloperator{\mbox{,}}~rev2~\mlkeyword{->}
 }
-\mlcodeline{17}{~~~~~~~~\mlkeywordA{let}~join\_{}rev2~\mlkeyword{=}~\mlmodulename{Intrevision}\mbox{}\mloperator{.}join~join\_{}rev1~rev2~\mlkeywordA{in}
+\mlcodeline{17}{~~~~~~~~\mlkeywordA{let}~join\_{}rev1~\mlkeyword{=}~\mlmodulename{IntRevision}\mbox{}\mloperator{.}join~revision~rev1~\mlkeywordA{in}
 }
-\mlcodeline{18}{~~~~~~~~~~\mlkeyword{assert}(\mlmodulename{IntRevision}\mbox{}\mloperator{.}read~join\_{}rev2~account~\mlkeyword{=}~15)}
+\mlcodeline{18}{~~~~~~~~\mlkeywordA{let}~join\_{}rev2~\mlkeyword{=}~\mlmodulename{Intrevision}\mbox{}\mloperator{.}join~join\_{}rev1~rev2~\mlkeywordA{in}
+}
+\mlcodeline{19}{~~~~~~~~~~\mlkeyword{assert}(\mlmodulename{IntRevision}\mbox{}\mloperator{.}read~join\_{}rev2~\mlkeyword{=}~15)~~}
 \end{longtable}
 }
 
-
 Example 2.\\
 
-In Example 2 we can see the actual implementation of the pseudo code in Example 1. From line 1 to 4 the user creates the {\tt IntRevision} module using a simple anonymous module specifying the type of the isolated data and the merge function. Then on line 7 he initializes an empty revision and one 8 and 9 he adds a new isolated to the initial revision to create a new one. He them forks the two asynchronous account credits (line 11 to 14) and later joins them. 
+In Example 2 we can see the actual implementation of the pseudo code in Example 1. From line 1 to 4 we create the {\tt IntRevision} module using a simple anonymous module specifying the type of the isolated data and the merge function. Then on line 7 we initialize an empty revision and on 8 we add a new isolated to the initial revision to create a new one. We then fork the two asynchronous account credits (line 11 to 14) and later join them. 
 
-This API is not as straight forward as the one in the C\# implementations for couple of reasons. Firstly since it is purely functional, revisions are immutable which requires to create a new revision at each join. Secondly, we need to explicitly create new isolated variables. What is more, it does not allow having isolated from different types in a revision, a trivial workaround for which is to use tuples.  
+This API is not as straight forward as the one in the C\# implementations for couple of reasons. Firstly since it is purely functional, revisions are immutable which requires to create a new revision at each join. Secondly, we need to explicitly create new isolated variables. In the C\# implementation the user simply declares which variables have to be isolated and then uses then accesses them as any regular variables, without explicit read and write operators to which he also has to specify the revision context. The solution in the project implementation is a bit less convenient, it uses special read and write methods, to which the context has to be explicitly stated. However, it makes it much clearer what is actually isolated and when it is accessed and in what context, resulting in a more comprehensive code.  Another drawback of my implementation is that it does not allow having isolated from different types in a single revision, a trivial workaround for which is to use tuples or another complex data structure.  
 
 
 
@@ -656,7 +659,7 @@ As part of my degree I have gained broad knowledge of the problems that arise fr
 Prior to starting the project, I had almost no experience with the OCaml programming language. For that reason I dedicated the first part of my project to making myself familiar with it. I used the Real World OCaml book [3] to guide me through the concepts and patterns for the language. I was able to quickly transfer and expand my skills in ML into OCaml without much difficulty.
 
 \section{The Core and Async libraries}
-I made extensive use of the Core and Async libraries for OCaml. The latter was used in the core of the implementation and the use cases. The Revision module conforms to the pattern of deferred computations in the Async library. This naturally happened in the development process, mainly because the library enforces them. Another reason for this is that the revision and isolated data types are completely isolated, making it trivial to implement them as deferred data types and the forks and the joins as deferred computations.  
+I made extensive use of the Core and Async libraries for OCaml. The latter was used in the core of the implementation and the use cases. The Revision module conforms to the pattern of deferred computations in the Async library. This naturally happened in the development process, since the the core concepts in the Async library and those of the project complement each other. The revision and isolated data types are completely isolated, making it trivial to implement them as deferred data types and the forks and the joins as deferred computations.  
 
 
 
