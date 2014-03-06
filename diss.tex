@@ -7,7 +7,7 @@
 
 \usepackage{pgf}
 \usepackage{tikz}
-\usetikzlibrary{arrows,automata}
+\usetikzlibrary{arrows,shapes,snakes,automata,backgrounds,petri}
 \usepackage[latin1]{inputenc}
 \usepackage{verbatim}
 \usepackage{tikz}
@@ -192,13 +192,11 @@ extent for a comparable purpose.
 \section{Overview of the project}
 The biggest challenge when using parallel programming is typically how to keep track of the side effects of computations that are executed in parallel. Traditional method for dealing with this issue often limit concurrency, do not provide sufficient determinism and are error prone. Ideally, we would like a concept where all conflict between parallel tasks are resolved deterministically with as less as possible effort from the programmer. 
 
-One concept that satisfies these requirements is that of Concurrent Revisions, initially proposed at OOPSLA'10 [1]. The aim of this projec is to implement this concept in the functional language OCaml and evaluate its performance and usability. The domain of functional languages was chosen because of their inherited determinism which makes using parallelism less complex and provides a facility for tracking side effects. I have designed and implemented a library that incorporates the ideas of Concurrent Revisions and ensured its correctness with a number of unit tests. Together with some small example code, two use cases were produced using the library - a logging system and a chat service. They were used to evaluate the performance and usability of the implementation and the whole concept in the world of OCaml. The conclusion was that [add when actually have a conclusion].  
-
-\section{Overview of Concurrent revisions}
+One concept that satisfies these requirements is that of Concurrent Revisions, initially proposed at OOPSLA'10 [1]. The aim of this project is to implement this concept in the functional language OCaml and evaluate its performance and usability. The domain of functional languages was chosen because of their inherited determinism which makes using parallelism less complex and provides a facility for tracking side effects. I have designed and implemented a library that incorporates the ideas of Concurrent Revisions and ensured its correctness with a number of unit tests. Together with some small example code, two use cases were produced using the library - a logging system and a chat service. They were used to evaluate the performance and usability of the implementation and the whole concept in the world of OCaml. The conclusion was that [add when actually have a conclusion].  
 
 The idea of Concurrent revisions as initially proposed highlights three main design choices:
 \begin{itemize}
-\item {\bfseries Declarative data sharing} - the user declares what data is to be shared between parallel tasks by the use of isolation types.
+\item {\bfseries Declarative data sharing} - the user declares what data is to be shared between parallel tasks by the use of isolation types (see section \ref{rev_data_struct} for discussion of the isolation types).  
 
 \item {\bfseries Automatic isolation} - each task has its own private stable copy of the data that is created at the time of the fork.
 
@@ -212,7 +210,7 @@ In this framework the unit of concurrency are asynchronous tasks called revision
 
 \subsection{Overview of other approaches to concurrency}
  
-Concurrency is essential and vital in multi core architectures and in distributed systems. Traditional approaches rely on synchronizing parallel tasks by locks, event driven formalisms or similar. This makes conflicts very expensive if determinism is needed. Moreover, these methods are often error prone and extremely hard to debug.
+Concurrency is essential and vital in multi core architectures and in distributed systems. Traditional approaches rely on synchronizing parallel tasks by techniques such as locks, event driven formalisms or transactions. This makes conflicts very expensive if determinism is needed. Moreover, these methods are often error prone and extremely hard to debug ([5], [6]).
 
 Standard locking schemes are sometimes a good approach to ensure consistency of data shared between multiple parallel tasks. However locking limits concurrency since task are blocked until it is safe to continue. Significant effort is required from the programmer to reason about all possible interleaves of task execution. Identifying the scope of critical sections becomes tricky as it could either limit concurrency or provide insufficient isolation. This approach is highly error prone and extremely difficult to maintain.
 
@@ -224,7 +222,7 @@ In the concept of concurrent revisions the guarantee of parallel executions bein
 
 \subsection{The contribution of Concurrent revisions}
 
-Much like transactional systems, Concurrent revisions use replication to ensure isolation. Because of that roll-back of aborted revisions comes for free, they are also relatively rare events since in most cases the conflict can be resolved. The guarantee of parallel executions being equivalent to some sequential schedule is relaxed. This increases parallelism and leaves to the programmer only two things to worry about - what has to be shared and how conflicts have to be resolved, concentrating any possible bugs in a limited region. With Concurrent revisions, given the right abstractions, the programmer can reason about the execution directly making the design of a concurrent system more natural.
+Much like transactional systems, Concurrent revisions use replication to ensure isolation. Because of that, roll-back of aborted revisions is very cheap, since each revision has its own copy of the isolated data, which in event of roll-back is simply discarded. Roll-backs are also relatively rare events since in most cases the conflict can be resolved. The guarantee of parallel executions being equivalent to some sequential schedule is relaxed. This increases parallelism and leaves to the programmer only two things to worry about - what has to be shared and how conflicts have to be resolved, concentrating any possible bugs in a limited region. With Concurrent revisions, given the right abstractions, the programmer can reason about the execution directly making the design of a concurrent system more natural.
 
 This approach is data centric in a sense that it takes the complexity of synchronization, in terms of programmer's effort, out of the tasks and adds it to the data declarations. The runtime complexity of synchronization is shifted from blocking or checking that the schedule of tasks was legal into the join of tasks where conflicts are resolved by a deterministic computation.   
 
@@ -235,13 +233,13 @@ Every system that is subject to a lot of conflicts typically has to limit the pa
 
 
 \item
-{\bfseries Bank transactional systems} - Such systems have a lot of constraints on invariants that form write- and read-skews. We will see later how this can nicely be resolved if using concurrent revisions (see 1.5.3).
+{\bfseries Bank transactional systems} - Such systems have a lot of constraints on invariants that form write- and read-skews. We will see later how this can nicely be resolved if using concurrent revisions (see \ref{rev_data_struct} and \ref{rev_in_ocaml}).
 
 \item
 {\bfseries Games} - They are a natural example when high parallelism is crucial for adequate performance. However, the fact that there are a lot of conflicts-user input, graphics rendering, simulating physics, game logic, write-backs to disk, makes getting their parallelization right tricky. Now what if we execute each of these tasks in separate revision and then join them as appropriate. There is one more concern of course - we have to be able to resolve conflicts. Luckily in order to do so, we simple have to define the merge function, which bundles all the complexity of dealing with conflicts into a single place, making it much more maintainable. Getting the merge function right is crucial, as we do not want our player to dash in a wall that was not displayed on the screen yet.
 
 \item
-{\bfseries Logging \& Chat systems} - The usage of functional languages for large commercial systems is increasing in large distributed systems such as logging and chat systems. One example of that is the Facebook chat, which is written in Erlang. Such systems are often large and distributed and have a lot of conflicts, timing and consistency are vital and they more or less require deterministic behaviour. This matches the list of requirements for suitability of concurrent revisions and we will see later that it is indeed convenient to write such systems using them.
+{\bfseries Logging \& Chat systems} - The usage of functional languages for large commercial systems is increasing in large distributed systems such as logging and chat systems. One example of that is the Facebook chat, which is written in Erlang. Such systems are often large and distributed and have a lot of conflicts, timing and consistency are vital and they more or less require deterministic behaviour. This matches the list of requirements for suitability of concurrent revisions and we will see later (chapters \ref{logging} \& \ref{chat_server}) that it is indeed convenient to write such systems using them.
 
 \end{itemize}
 
@@ -351,9 +349,10 @@ Here {\tt x} is declared as a {\tt int ref} and is a reference to a particular p
 
 
 \subsection{Complex data structures from the Core library}
-The Core library is a wrapper around the standard OCaml library that provides additional features. It this project I used the map and set data structures which are implemented as AVL trees. An AVL tree is a self-balanced binary search tree that guarantees a logarithmic complexity for insertions, deletions and updates due to its balanced structure. Both these data structures are immutable, allowing them to share great proportion of their internal structure. This makes replication cheap both in terms of space and time. 
+\label{datastruct_core}
+The Core library is a replacement of the standard OCaml library that provides additional features. It this project I used the map and set data structures which are implemented as AVL trees. An AVL tree is a self-balanced binary search tree that guarantees a logarithmic complexity for insertions, deletions and updates due to its balanced structure. Both these data structures are immutable, allowing them to share great proportion of their internal structure [7]. This makes replication cheap both in terms of space and time. 
 
-\subsection{Module system}
+\subsection{Module system} 
 The module system is a key feature of OCaml. It can be used to package together related definitions. For example one can package a particular data type together with the associated operations over that type and abstract away the actual implementation of that type. Here is an example of a simple module:
 
 %module Balance : sig
@@ -413,7 +412,7 @@ A valuable feature when dealing with modules are the functors. Functors can be s
 Here I am using the build-in in Core functor {\tt Set.Make} to create an integer set. The functor expect a module with a signature that requires the type of the set elements, i.e {\tt t}, and a comparison function between elements. Notice the use of the build-in comparison function from the module {\tt Int} on line 4.
 
 \subsection{The Async concurrency library}
-The Async library was used as the exclusive source of parallelism throughout the project. Async is a monadic concurrency library. It is build around the idea of deferred computations that are scheduled non-deterministically. It has a global lock that ensures only one computation will be in execution at any given time. Each computation is executed atomically which guarantees two computations will never overlap. The most common pattern for programming with Async is to schedule new computations to be executed in an event-driven fashion over the outputs of a previous computation once they are determined. This results in a guarantee for a sequence of actions to be performed in a particular order. Example taken from [3]:
+The Async library was used as the exclusive source of concurrency throughout the project. Async is a monadic concurrency library. It is build around the idea of deferred computations that are scheduled non-deterministically. It has a global lock that ensures only one computation will be in execution at any given time. Each computation is executed atomically which guarantees two computations will never overlap. The most common pattern for programming with Async is to schedule new computations to be executed in an event-driven fashion over the outputs of a previous computation once they are determined. This results in a guarantee for a sequence of actions to be performed in a particular order. Example taken from [3]:
 
 %Reader.file_contents filename
 %   >>| fun text ->
@@ -435,9 +434,11 @@ This pattern can be used to overcome in event-driven manner the problem of the b
 \subsection{Additional reference}
 For more detailed overview of OCaml please see {\bf Real World OCaml -  Jason Hickey, Anil Madhavapeddy, and Yaron Minsky; O'Reilly 2013} [3], which provides an excellent and very approachable introduction to OCaml.
 
-\section{Deeper look into the concept}
-\subsection{Data structures \& Runtime behaviour }
+\section{Overview of the concept}
 
+
+\subsection{Data structures \& Runtime behaviour }
+\label{rev_data_struct}
 The main data structure in the concept are the revisions. They can be seen as a stable context for each asynchronous task as they are isolated of each other. The isolation types encapsulate the structure of the data to be shared. 
 
 Let's look at a pseudo-code simple example:
@@ -516,13 +517,15 @@ Not all possible joins are legal as some of them might invalidate the assumption
 
 \begin{tikzpicture}[->,>=stealth',shorten >=1pt,auto,node distance=2.8cm,
                     semithick]
-  \tikzstyle{every state}=[fill=red,draw=none,text=white]
+    \tikzstyle{place}=[circle,thick,draw=blue!75,fill=blue!20,minimum size=6mm]
+  \tikzstyle{red place}=[circle,thick,draw=blue!75,fill=red!75,minimum size=6mm]
+  \tikzstyle{green place}=[circle,thick,draw=blue!75,fill=green!50,minimum size=6mm]
 
-  \node[state] (A)                    {1};              
-  \node[state]         (B) [below right of=A] {3};
-  \node[state]         (C) [below left  of=A] {2};
-  \node[state]         (D) [below left of=B] {4};
-  \node[state]         (E) [below of=D]       {5};
+  \node[place] (A)                    {1};              
+  \node[green place]         (B) [below right of=A] {3};
+  \node[green place]         (C) [below left  of=A] {2};
+  \node[place]         (D) [below left of=B] {4};
+  \node[place]         (E) [below of=D]       {5};
 
 
 
@@ -536,22 +539,24 @@ Not all possible joins are legal as some of them might invalidate the assumption
         ;      
 \end{tikzpicture}
  
-Fig.1: Revision diagram of Example 1. In the following diagram the nodes are the revisions. Outgoing arrows represent forks and  joins are represented by incoming arrows, which are always two, one straight for the revision we are joining to and one bend for the joinee. In the diagram nodes correspond to revisions as follows: 1 - {\tt revision } 2 - {\tt rev1 } 3 - {\tt rev2 } 4 - {\tt join\_rev1 } 5 - {\tt join\_rev2}  
+Fig.1: Revision diagram of Example 1. In the following diagram the nodes are the revisions, the forked revisions are green and the join results are blue. Outgoing arrows represent forks and  joins are represented by incoming arrows, which are always two, one straight for the revision we are joining to and one bend for the joinee. In the diagram nodes correspond to revisions as follows: 1 - {\tt revision } 2 - {\tt rev1 } 3 - {\tt rev2 } 4 - {\tt join\_rev1 } 5 - {\tt join\_rev2}  
 
 \begin{tikzpicture}[->,>=stealth',shorten >=1pt,auto,node distance=2.8cm,
                     semithick]
-  \tikzstyle{every state}=[fill=red,draw=none,text=white]
+    \tikzstyle{place}=[circle,thick,draw=blue!75,fill=blue!20,minimum size=6mm]
+  \tikzstyle{red place}=[circle,thick,draw=blue!75,fill=red!75,minimum size=6mm]
+  \tikzstyle{green place}=[circle,thick,draw=blue!75,fill=green!50,minimum size=6mm]
 
-  \node[state]         (A)                    {1};              
-  \node[state]         (B) [below right of=A] {2};
-  \node[state]         (C) [below right  of=B] {3};
-  \node[state]         (D) [below left of=B] {4};
-  \node[state]         (E) [below of=D]       {5};
+  \node[place]         (A)                    {1};              
+  \node[green place]         (B) [below right of=A] {2};
+  \node[green place]         (C) [below right  of=B] {3};
+  \node[place]         (D) [below left of=B] {4};
+  \node[place]         (E) [below of=D]       {5};
 
-  \node[state]         (F) [above right of=C]         {1};
-  \node[state]        (G) [below of=F]         {2};
-  \node[state]         (H) [above right of=F]         {3};
-  \node[state]         (I) [below of=H]        {4};
+  \node[place]         (F) [above right of=C]         {1};
+  \node[place]        (G) [below of=F]         {2};
+  \node[place]         (H) [above right of=F]         {3};
+  \node[place]         (I) [below of=H]        {4};
         
   \path (A) edge [bend left]  node {} (B)
             edge               node{}       (D)
@@ -574,6 +579,8 @@ In Fig.2 we can see two illegal revision diagrams. In the first one, we join rev
 In the second example, we are interleaving two separate flows of revisions and there is no way to ensure that they isolate a similar state. This is completely meaningless, since they could isolate different variables and represent unrelated states.
 
 \subsection{Concurrent revisions in the world of OCaml}
+
+\label{rev_in_ocaml}
 The OCaml implementation of Concurrent Revisions is presented in chapter 3. One of its advantages over the C\# implementation is that it is purely functional and the type checker catches some of the typical mistakes that can be made - trying to access an isolated of a wrong type or join revisions of different types. What it does not do however is check for all types of illegal revision diagrams, instead an exception is raised whenever an illegal join is executed. This is far from ideal and statically type-checking joins for compatibility could be implemented as a future extension.
 
 The API that the implementation exposes to the user is intuitive and resembles the typical OCaml approach for APIs for external libraries. Here is a simple example of its usage:
@@ -590,13 +597,17 @@ let () =
    and account = IntRevision.get_isolated res1 in
      Deferred.both 
       (IntRevision.fork revision 
-        (fun r -> return (IntRevision.write r account ((IntRevision.read r account) + 5)))
+        (fun r -> 
+          return (IntRevision.write r account 
+                    ((IntRevision.read r account) + 5)))
       (IntRevision.fork revision 
-        (fun r -> return (IntRevision.write r account ((IntRevision.read r account) + 10)))
+        (fun r -> 
+          return (IntRevision.write r account 
+                    ((IntRevision.read r account) + 10)))
      >>|(fun (rev1, rev2 ->
         let join_rev1 = IntRevision.join revision rev1 in
         let join_rev2 = Intrevision.join join_rev1 rev2 in
-          assert(IntRevision.read join_rev2 = 15)  
+          assert(IntRevision.read join_rev2 = 15)    
 \end{comment}
 
 
@@ -625,27 +636,36 @@ let () =
 }
 \mlcodeline{12}{~~~~~~(\mlmodulename{IntRevision}\mbox{}\mloperator{.}fork~revision~
 }
-\mlcodeline{13}{~~~~~~~~(\mlkeyword{fun}~r~\mlkeyword{->}~return~(\mlmodulename{IntRevision}\mbox{}\mloperator{.}write~r~account~((\mlmodulename{IntRevision}\mbox{}\mloperator{.}read~r~account)~\mloperator{+}~5)))
+\mlcodeline{13}{~~~~~~~~(\mlkeyword{fun}~r~\mlkeyword{->}~
 }
-\mlcodeline{14}{~~~~~~(\mlmodulename{IntRevision}\mbox{}\mloperator{.}fork~revision~
+\mlcodeline{14}{~~~~~~~~~~return~(\mlmodulename{IntRevision}\mbox{}\mloperator{.}write~r~account~
 }
-\mlcodeline{15}{~~~~~~~~(\mlkeyword{fun}~r~\mlkeyword{->}~return~(\mlmodulename{IntRevision}\mbox{}\mloperator{.}write~r~account~((\mlmodulename{IntRevision}\mbox{}\mloperator{.}read~r~account)~\mloperator{+}~10)))
+\mlcodeline{15}{~~~~~~~~~~~~~~~~~~~~((\mlmodulename{IntRevision}\mbox{}\mloperator{.}read~r~account)~\mloperator{+}~5)))
 }
-\mlcodeline{16}{~~~~~\mloperator{>\mbox{}>\mbox{}|}(\mlkeyword{fun}~(rev1\mloperator{\mbox{,}}~rev2~\mlkeyword{->}
+\mlcodeline{16}{~~~~~~(\mlmodulename{IntRevision}\mbox{}\mloperator{.}fork~revision~
 }
-\mlcodeline{17}{~~~~~~~~\mlkeywordA{let}~join\_{}rev1~\mlkeyword{=}~\mlmodulename{IntRevision}\mbox{}\mloperator{.}join~revision~rev1~\mlkeywordA{in}
+\mlcodeline{17}{~~~~~~~~(\mlkeyword{fun}~r~\mlkeyword{->}~
 }
-\mlcodeline{18}{~~~~~~~~\mlkeywordA{let}~join\_{}rev2~\mlkeyword{=}~\mlmodulename{Intrevision}\mbox{}\mloperator{.}join~join\_{}rev1~rev2~\mlkeywordA{in}
+\mlcodeline{18}{~~~~~~~~~~return~(\mlmodulename{IntRevision}\mbox{}\mloperator{.}write~r~account~
 }
-\mlcodeline{19}{~~~~~~~~~~\mlkeyword{assert}(\mlmodulename{IntRevision}\mbox{}\mloperator{.}read~join\_{}rev2~\mlkeyword{=}~15)~~}
+\mlcodeline{19}{~~~~~~~~~~~~~~~~~~~~((\mlmodulename{IntRevision}\mbox{}\mloperator{.}read~r~account)~\mloperator{+}~10)))
+}
+\mlcodeline{20}{~~~~~\mloperator{>\mbox{}>\mbox{}|}(\mlkeyword{fun}~(rev1\mloperator{\mbox{,}}~rev2~\mlkeyword{->}
+}
+\mlcodeline{21}{~~~~~~~~\mlkeywordA{let}~join\_{}rev1~\mlkeyword{=}~\mlmodulename{IntRevision}\mbox{}\mloperator{.}join~revision~rev1~\mlkeywordA{in}
+}
+\mlcodeline{22}{~~~~~~~~\mlkeywordA{let}~join\_{}rev2~\mlkeyword{=}~\mlmodulename{Intrevision}\mbox{}\mloperator{.}join~join\_{}rev1~rev2~\mlkeywordA{in}
+}
+\mlcodeline{23}{~~~~~~~~~~\mlkeyword{assert}(\mlmodulename{IntRevision}\mbox{}\mloperator{.}read~join\_{}rev2~\mlkeyword{=}~15)~~}
 \end{longtable}
 }
 
+
 Example 2.\\
 
-In Example 2 we can see the actual implementation of the pseudo code in Example 1. From line 1 to 4 we create the {\tt IntRevision} module using a simple anonymous module specifying the type of the isolated data and the merge function. Then on line 7 we initialize an empty revision and on 8 we add a new isolated to the initial revision to create a new one. We then fork the two asynchronous account credits (line 11 to 14) and later join them. 
+In Example 2 we can see the actual implementation of the pseudo code in Example 1. From line 1 to 4 we create the {\tt IntRevision} module using a simple anonymous module specifying the type of the isolated data and the merge function. Then on line 7 we initialize an empty revision and on 8 we add a new isolated to the initial revision to create a new one. We then fork the two asynchronous account credits (line 11 to 19) and later join them. 
 
-This API is not as straight forward as the one in the C\# implementations for couple of reasons. Firstly, since it is purely functional, revisions are immutable which requires to create a new revision at each join. Secondly, we need to explicitly create new isolated variables. In the C\# implementation the user simply declares which variables have to be isolated and then uses them as any regular variables. The solution in the project implementation is a bit less convenient - it uses special read and write methods, to which the context has to be explicitly stated. However, it makes it much clearer what is actually isolated, when it is accessed and in what context, resulting in a more comprehensive code.  Another drawback of my implementation is that it does not allow having isolated from different types in a single revision, a trivial workaround for which is to use tuples or another complex data structure. I considered using a universal OCaml type as an alternative. Universal types in OCaml however can be implemented only using exceptions which are highly inefficient. 
+This API is not as straight forward as the one in the C\# implementations for couple of reasons, which makes the usage of revisions a bit more verbose and tedious, but has the benefit of clarity of the programming logic. Since the implementation is purely functional, revisions are immutable which requires to create a new revision at each join. We also need to explicitly create new isolated variables. In the C\# implementation the user simply declares which variables have to be isolated and then uses them as any regular variables. The solution in the project implementation is a bit less convenient - it uses special read and write methods, to which the context has to be explicitly stated. However, it makes it much clearer what is actually isolated, when it is accessed and in what context, resulting in a more comprehensive code.  Another drawback of my implementation is that it does not allow having isolated from different types in a single revision, a trivial workaround for which is to use tuples or another complex data structure. I considered using a universal OCaml type as an alternative. Universal types in OCaml however can be implemented only using exceptions which are highly inefficient. 
 
 
 
@@ -656,7 +676,7 @@ This API is not as straight forward as the one in the C\# implementations for co
 
 \chapter{Preparation}
 \section{The author in the world of Concurrency}
-As part of my degree I have gained broad knowledge of the problems that arise from Concurrency and the typical approaches for solving them. The Concurrent and Distributed Systems course gave me most insight into why and how Concurrent revisions can be used for parallel programming. After reading the original paper, the concept naturally fit in and expanded the mental model I have created about the issues and solutions in the world of Concurrency.  
+As part of my degree I have gained broad knowledge of the problems that arise from concurrency and the typical approaches for solving them. The Concurrent and Distributed Systems course gave me most insight into why and how Concurrent revisions can be used for parallel programming. After reading the original paper, the concept naturally fit in and expanded the mental model I have created about the issues and solutions in the world of Concurrency.  
 
 \section{Familiarizing with the OCaml programming language}
 Prior to starting the project, I had almost no experience with the OCaml programming language. For that reason I dedicated the first part of my project to making myself familiar with it. I used the Real World OCaml book [3] to guide me through the concepts and patterns for the language. I was able to quickly transfer and expand my skills in ML into OCaml without much difficulty.
@@ -795,6 +815,10 @@ The former is also purely function and returns a new revision with the updated v
 
 The {\tt determine\_revision} is used to ensure that a revision is evaluated and not merely scheduled for evaluation. Initially the library was not intended to provide such functionality, however during the design of the use cases the need became apparent and I added it to the implementation.
 
+All operations over revisions and isolated types are type checked for compatibility.
+
+The library itself could raise two types of exceptions - {\tt Isolated\_Not\_Found} when a isolated is read/written inside a revision that does not contain it and when the run-time discovers an illegal join (note that not all of these are caught), it raises an {\tt Incompatible\_join} exception. See chapter \ref{errors} for extended discussion on errors.
+
 \section{Revisions behind the curtains - data structures}
 The internal structure of the revisions is implemented by the following data type:
 
@@ -811,7 +835,7 @@ The internal structure of the revisions is implemented by the following data typ
 \end{longtable}
 }
 
-It is a deferred record type which contains two maps that map isolated variables to their value in the parent or the current revision respectfully. Their is also a written set that keeps track of which isolated variables have been updated in order to improve the performance at join time. The {\tt Isolated.t} is itself implemented simply as an integer value that is used as a key into the maps. The {\tt id} field in the revision type keeps track of the id of the last created isolated in that revision chain to ensure uniqueness of ids. 
+It is a deferred record type which contains two maps that map isolated variables to their value in the parent or the current revision respectively. Their is also a written set that keeps track of which isolated variables have been updated in order to improve the performance at join time. The {\tt Isolated.t} is itself implemented simply as an integer value that is used as a key into the maps. The {\tt id} field in the revision type keeps track of the id of the last created isolated in that revision chain to ensure uniqueness of ids. 
 
 The reasons for choosing these particular data structures are explained in the following section.   
 
@@ -819,14 +843,16 @@ The reasons for choosing these particular data structures are explained in the f
 
 The key aims of the design were to produce a solution that is purely functional, as well as efficient. The desire for a purely functional approach was driven by the necessity of tracking effects of parallel executions. Purely functional implementation ensures that no side effects occur to the isolated variables inside the revisions and ideologically changes happen only when revisions are joined. The benefit of this is that modifications of the state are explicit and easy to track both for the programmer and the run time. Another advantage of this design decision is that replication is very cheap both in terms of time and space, because in OCaml complex data structures which are immutable, such as maps, allocate more memory only when the structure is changed, reusing as much as possible of the internals of the initial structure.
 
-The main design choice for the implementation was how to implement the revisions internally. The obvious choice for the mapping of isolated variables to values was between hash tables and maps. The former would have given constant time for all the update and add operations. However, in OCaml hash tables are usually implemented as mutable data structures. Their imperative nature would have broken the functional model of operation for the library. I could have hidden under the curtains the fact that I am using a mutable data structure by lazy replication. This would mean that upon creating a new revision, the structure representing the parent of this revision (which would be a hash table) would have to be replicated explicitly and values would be added to the current revisions only after writes. This would increase the time and space complexity of forks and joins linearly in terms of the number of isolated variables since each of these operations would have to explicitly replicate the whole hash table containing all isolated values. The functional nature that I was aiming for required creating a new revision after each operation (either fork, join or addition of a new isolated variable). This makes the creation of new revisions the most common action by the library and shifting from constant to linear complexity was highly undesirable. Taking this consideration into account I made the choice of using maps in the internal structure of the revisions. I used the implementation of maps in the Core library. As mentioned in section 1.4.2, they are implemented as AVL trees, which are self-balanced binary search trees, which provide logarithmic complexity for all reads and writes to their structure. Since only insertion and update operations were performed on the maps, all operations on maps we use are of logarithmic time. What is more, since maps in OCaml are purely functional, they reuse a lot of their internal structure and there is no duplication of data. 
+The main design choice for the implementation was how to implement the revisions internally. The obvious choice for the mapping of isolated variables to values was between hash tables and maps. The former would have given constant time for all the update and add operations. However, in OCaml hash tables are usually implemented as mutable data structures. Their imperative nature would have broken the functional model of operation for the library. I could have hidden under the curtains the fact that I am using a mutable data structure by lazy replication. This would mean that upon creating a new revision, the structure representing the parent of this revision (which would be a hash table) would have to be replicated explicitly and values would be added to the current revisions only after writes. This would increase the time and space complexity of forks and joins linearly in terms of the number of isolated variables since each of these operations would have to explicitly replicate the whole hash table containing all isolated values. 
+
+The functional nature that I was aiming for required creating a new revision after each operation (either fork, join or addition of a new isolated variable). This makes the creation of new revisions the most common action by the library and shifting from constant to linear complexity was highly undesirable. Taking this consideration into account I made the choice of using maps in the internal structure of the revisions. I used the implementation of maps in the Core library. As mentioned in section \ref{datastruct_core}, they are implemented as self-balanced binary search trees, which provide logarithmic complexity for all reads and writes to their structure. Since only insertion and update operations were performed on the maps, all operations on maps we use are of logarithmic time. What is more, since maps in OCaml are purely functional, they reuse a lot of their internal structure and there is no duplication of data. 
 
 \subsection{Complexity}
 Forking a new revision does not require additional space as the revision structure of the parent is not changed and the forked revision merely points to it. The functional nature of the implementation guarantees that the parent would never be mutated, making this way of replication completely safe. Inside the fork, the only operation that requires extra space is {\tt Revision.write}. It has to change the value of a isolated in a revision. Under the hood this is implemented as a value update in a map. As mentioned previously, this takes just O(log n) time, where n is the number of isolated in that revision and just constant space due to the immutable nature of Core maps and the re-usage of their internal structure. 
 
 In similar fashion to forks, joins also create a new revision, heavily reusing the map from the revision to which we are joining. For every variable changed in the joinee, its value in the head revision, the parent revision and the current revision is read, which as already discussed, takes logarithmic time in terms of the number of isolated variables. Then for each written variable, the merge function is called and the result of it is applied to the head revision, creating a new one. This takes time O(k*log n*merge), where merge is the runtime complexity of the merge function, k is the number of variables changed in the joinee and n is the total number of variables in the revision. The join performs k updates to values in the map, which means it has space complexity of O(k + merge), where merge is the space complexity of the merge function. Everything allocated in the merge function is garbage collected after it is executed, which means it does not add extra space complexity to the total runtime. Revisions created by the forks and join would also be garbage collected once they are out of scope, which means space usually is used only for forks not yet joined and the head revisions. We will see how this works in practice with the use cases later on. 
 
-In total, a sequence of k forks and joins, n isolated variables, r reads and w writes gives a total runtime overhead of using revisions of O(r*log n + w*log n + k + w*log n) = O((r+w)log n). In most use cases n is a small number, which means that we could regard log n as a constant. This results in unaffected time complexity of the initial algorithm the user is implementing. For example the use cases of a logging and a chat system, discussed later, use only a single isolated. Even when a large number of isolated is needed, we still get only logarithmic overhead. However, using an alternative approach to concurrency would need a more elaborate synchronization scheme that would rely on blocking or roll-backs which in a parallel system would waste a lot of CPU time or cause delays when conflicts arise. This would typically be much greater than the overhead of revisions. What is more, alternative approaches require significantly more effort from the programmer.
+In total, a sequence of k forks and joins, n isolated variables, r reads and w writes gives a total runtime overhead of using revisions of O(r*log n + w*log n + k + w*log n) = O((r+w)log n). In most use cases n is a small number, which means that we could regard log n as a constant. This results in unaffected time complexity of the initial algorithm the user is implementing. For example the use cases of a logging and a chat system, discussed in chapters \ref{logging} and \ref{chat_server}, use only a single isolated. Even when a large number of isolated is needed, we still get only logarithmic overhead. However, using an alternative approach to concurrency would need a more elaborate synchronization scheme that would rely on blocking or roll-backs which in a parallel system would waste a lot of CPU time or cause delays when conflicts arise. This would typically be much greater than the overhead of revisions. What is more, alternative approaches require significantly more effort from the programmer.
 
 In terms of space, the runtime of revisions adds just a constant overhead for each write, which does not affect the space complexity of the algorithm.     
 
@@ -836,6 +862,7 @@ All operations on revisions were implemented as deferred computations in the fra
 For existing systems build on different concepts, integrating revisions would be clumsy and difficult and would require blocking from inside Async. However this is not a flaw of the implementation itself. Combining concepts relying on different assumptions and providing different guarantees is naturally conflicting and is often undesirable. In fact, this issue is inherited from the Async library, which also is not trivially integrated in legacy OCaml code.     
 
 \subsection{Error handling}
+\label{errors}
 There are two classes of runtime errors that the implementation has to deal with.
  
 The first one is concerned with illegal usage of revisions. When a read or write of an isolated from a revision is executed, there is still no guarantee that the revision contains a value for this particular isolated, even when their compatibility was successfully type-checked. In that case an exception {\tt Isolated\_Not\_Found} is raised. When the run-time discovers an illegal join (note that not all of these are caught), it raises an {\tt Incompatible\_join} exception.
@@ -848,7 +875,98 @@ The second class of runtime errors are those occurring in the user declared code
  The simple examples from the original paper were also implemented. These include the previously discussed example of isolating integers, a "Hello World" example using isolated strings and an example demonstrating the benefits of re-raising fork exceptions when revisions are joined, which provides efficient tools for roll-backs of revisions.
   
 \section{Use case - Logging system}
+\label{logging} 
+The first use case I designed using the library was a distributed logging service. In this use case there is one central server that receives log messages from multiple clients and merges them into a single log stream. 
+
+\subsection{Motivation}
+Performance of distributed systems could typically be improved by using extra concurrency. One such example is this type of logging system. 
+As this is a distributed system with centralized service, responsiveness and scalability is required at the server end, which is the bottleneck of the whole system. The former could be achieved by adding extra concurrency and the latter by exploring hardware parallelism. However, naively introducing concurrency in such a system would introduce a lot of non-determinism. Message passing could suffer from random delays and message processing can be reordered by the runtime behaviour of the server. The service that this system should provide should be deterministic and log messages should be totally ordered.
+
+This is an excellent field to use Concurrent revisions to introduce concurrency in a deterministic way which would increase responsiveness. My implementation of revisions do not explore hardware parallelism due to the OCaml runtime limitation for this. However by reducing the synchronization logic at the server side, the implementation could become more scalable as synchronization becomes less expensive and processing messages could be done more efficiently
+
+\subsection{Features}
+The system provides only three features:
+\begin{itemize}
+\item
+Registration of new logging clients
+\item
+Logging messages from the clients
+\item
+Dumping the log history to a file at the server side upon request from a client
+\end{itemize}
+
+Although this system does not provide a lot of features, what complicated its design is the guarantees it should give:
+\begin{itemize}
+\item
+Messages from a single clients should not be reordered in the global log stream
+\item
+Logged messages should never be lost
+\item
+Messages from different clients should be ordered in the stream by their local timestamps
+\end{itemize}
+
+This requires care to be taken when merging a new message to the stream. More importantly - the clearly defined total order on log messages (modulo clash of timestamps up to milliseconds) suggests a deterministic run-time behaviour.
+For the purpose of this course I am using locally taken timestamps in the clients to impose that order. The alternative would be order by the absolute logging time of messages, which would require distributed message passing ordering, which is beyond the scope of this project and does not relate to its purpose. 
+
+\subsection{Implementation}
+I will focus on the implementation of the server as it the bottleneck of the system and could benefit much more from added concurrency.
+
+\subsubsection{State representation}
+The state of the system is represented by a module {RepMessage} that wraps around a map from timestamps to messages and provides the basic functionality required for over the stream of log messages (for an extended discussion of the functionality of the module see [REF]). 
+
+\subsubsection{Usage of Concurrent revisions}
+
+The state that has to be isolated and consistently updates is the stream of log messages itself. I declared {RepMessage.t} as the type to be isolated. Then I created a revision module using the library I implemented for Concurrent revisions for operating over this isolated state. 
+
+My initial aim was for a purely functional design, this however turned out to limit concurrency significantly. The reason for this is that each processing of a log message and merging of its effects has to operate on a consistent state of the server and once the state is changed successfully, new messages have to be processed according to the new state.  Achieving this in a purely functional manner will require passing the state as a input argument to the function serving the requests. If this function is recursive then this input parameter could be used as a running state. However, this does not provide any parallelism at all since the same running state should be updated by the merge function. This would impose completely sequential order of events. One way to work around this issue would to be use monadic design which would allow tracking of state changes. However, this seems a bit of a overkill for this simple use case. Instead I decided to use a global reference to the head revision, which is read by each fork and written by each join.
+
+After arming myself with a Concurrent revision module that allows forking and joining asynchronous tasks that mutate the global state, there was one more concern - how to resolve conflicts. In the concept of revisions there is an explicit place where to do that - the merge function. This function has to deterministically add new messages to the stream, keeping them in order and ensuring no messages are lost. Conflicts can only arise from messages added to the stream so only this case has to be dealt with by the merge function. This function takes three arguments - the current state, the state at the time of the fork and the state containing the changes made inside the fork. For optimization purposes the last precessed message is also kept with the state, otherwise the merge function would have to take the union of two stream which would be expensive. What it does instead is to look at this last message timestamp and add it to the appropriate place in the current state. Since the use case is fairly simple, the merge function do not examine the streams in its last two arguments.
+
+\subsubsection{Runtime flow}
+Each user that wants to communicate with the server opens a TCP connection with it. Then the server and the clients exchange commands that are predefined and are shared between them. They are passed around serialized as s-expressions. S-expressions are an efficient serialization technique in OCaml, based on well bracketed expressions. A simple example of s-expression would be {\tt (this (is an) (s expression))}. 
+
+All the connections are served in parallel and messages are added to a pipe as they arrive without blocking. A recursive function takes messages out of this pipe and forks a new revision corresponding to each message. The forked revisions are just scheduled for evaluation without blocking the function that takes messages out of the pipe, which means that at any given time there can be arbitrary many fully parallelized forks. 
+
+Again in full parallel, the revisions of that result from the forks are added to another pipe after they have been determined. Another recursive function takes revisions (which are already determined) and joins them one by one to the global state. Note that this function will never block waiting for a revision coming from the pipe to be determined as all revisions in the pipe are guaranteed to already have been evaluated. Parallelizing the joins is not possible as this will result in invalid revision diagram, which diverges forever without even converging to a globally consistent state. Having said that, the run-time of the server is as concurrent as the concurrent revisions concept allows for.
+
+Updating a reference at the end of the join, which is also dereferenced at the forking time and in the beginning of the join, is safe since all deferred computations in Async are atomic and guarantee that consistent global state is always seen both by the forks and the joins.  
+
+\vspace*{5mm}
+
+\begin{tikzpicture}[->,>=stealth',shorten >=1pt,auto,node distance=2.8cm,
+                    semithick]
+  \tikzstyle{place}=[circle,thick,draw=blue!75,fill=blue!20,minimum size=6mm]
+  \tikzstyle{red place}=[circle,thick,draw=blue!75,fill=red!75,minimum size=6mm]
+  \tikzstyle{green place}=[circle,thick,draw=blue!75,fill=green!50,minimum size=6mm]
+
+  \node[place] (A)                    {s1}; 
+  \node[red place] (B) [below left of=A] {f1};
+  \node[green place] (C) [below right of=A] {f2};
+  \node[green place] (D) [below right of=C] {f3}; 
+  \node[red place] (E) [above right of=D] {f4}; 
+  \node[place] (F) [below right of=B] {s2};
+  \node[red place] (G) [below left of=F] {f6};
+  \node[red place] (H) [below right of=F] {f7};             
+  \node[place] (I) [below right of=G] {s3}; 
+  
+  \path (A) edge [bend left]  node {} (C)
+            edge [bend right] node {} (B)
+            edge [bend left]  node {} (D)
+            edge [bend left]  node {} (E)
+            edge []             node {} (F) 
+        (C) edge [bend left]  node {} (F)
+        (F) edge [bend left]  node {} (H)
+            edge [bend right] node {} (G)
+            edge []           node {} (I) 
+        (D) edge [bend left] node {} (I);
+  
+   
+\end{tikzpicture}
+
+Fig 3.1: Revision diagram of example flow in the logging server. Here the blue nodes denote revisions keeping the global state, red nodes - not joined yet fork revisions and green nodes - joined fork revisions. It this example from state s1 are forked four revisions (the number of forked revisions is not constrained, it depends only on task interleaving). When revision f2 is joined to the state, the global state is updated to the result of the join - s2. Any fork that is joined afterward is joined to this new state (unless it has been updated again of course), an example of which is f3, which was forked by s1, but joined to s3. 
+       
 \section{Use case - Chat server}
+\label{chat_server}
 \subsection{Motivation}
 
 Much like the logging system, a chat system is highly distributed, which has a lot of conflicts that have to be resolved deterministically and requires scalability and limited delays. Such a system can benefit significantly from parallelism, which would allow for more clients to be served and to limit the delays that these clients might experience.
@@ -983,14 +1101,14 @@ The final example of special case with which the merge function has to deal with
 
 \subsubsection{Runtime flow}
 
-Each user that wants to communicate with the server opens a TCP connection with it. Then the server and the clients exchange commands that are predefined and are shared between them. They are passed around serialized as s-expressions. S-expressions are an efficient serialization technique in OCaml, based on well bracketed expressions. 
+REFERENCE PREVIOUS USE CASE 
 
-All the connections are served in parallel and commands are added to a pipe as they arrive without blocking. A recursive function takes commands out of this pipe and forks a new revision corresponding to each command. The forked revisions are just scheduled for evaluation without blocking the function that takes commands out of the pipe, which means that at any given time there can be arbitrary many fully parallelized forks. 
+\subsection{Implementation without Concurrent revisions}
+I implemented a second version of the chat server which does not make use of Concurrent revisions. The functionality and state representation is exactly the same as for the other version, discussed in [REF].
 
-Again in full parallel, the revisions of that result from the forks are added to another pipe after they have been determined. Another recursive function takes revisions (which are already determined) and joins them one by one to the global state. Note that this function will never block waiting for a revision coming from the pipe to be determined as all revisions in the pipe are guaranteed to already have been evaluated. Parallelizing the joins is not possible as this will result in invalid revision diagram, which diverges forever without even converging to a globally consistent state. Having said that, the run-time of the server is as concurrent as the concurrent revisions concept allows for.
+What is different is the runtime flow. In this version events from clients are still accepted concurrently, but they are processed in a sequential manner. This significantly reduces concurrency inside the implementation. 
 
-Updating a reference at the end of the join, which is also dereferenced at the forking time and in the beginning of the join, is safe since all deferred computations in Async are atomic and guarantee that consistent global state is always seen both by the forks and the joins.  
-
+The performance of both versions of the chat server is discussed in [REF].
 
 \section{Remaining issues}
 
@@ -1045,6 +1163,15 @@ It works! (or not)
 \item{[3]} \emph{Real World OCaml} Jason Hickey, Anil Madhavapeddy, and Yaron Minsky; O'Reilly 2013
 \item{[4]} \emph{Concurrency Control and Recovery in Database Systems. Addison-Wesley, 1987} P.A.Bernstein, V.Hadzilacos, and N.Goodman.
 
+
+\item{[5]} \emph{Operating systems: distributed and concurrent software design. Addison-Wesley 2003} Bacon, J. \& Harris, T. (2003). 
+\item{[6]} \emph{Transactional boosting: a
+methodology for highly-concurrent transactional objects. In
+Principles and Practice of Parallel Programming (PPoPP),pages 207–216, 2008} M. Herlihy and E. Koskinen. 
+
+\item{[7]} \emph{Algorithms, Addison-Wesley, 1983, page 199, chapter 15: Balanced Trees.} Robert Sedgewick
+
+\item{[8]} \emph{Prettier Concurrency - Purely Functional Concurrent Revisions} Daan Leijen Sebastian Burckhardt Manuel Faahndrich, Microsoft Research
 \end{description}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
