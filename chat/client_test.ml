@@ -128,11 +128,11 @@ let parse_command line = try begin
   else if Str.string_match regexp_send line 0 then
     let split = String.lsplit2 (Str.replace_first regexp_send_ "" line) ' ' in
     match split with
-      Some (room, message) -> Message({timestamp = Time.now();
+      Some (room, message) -> let m = (Message({timestamp = Time.now();
                                   user_id = !id;
                                   text = message;
                                   room_id = (int_of_string room)
-                                 })
+                                 })) in print_message m; m
     | _ -> raise (Parse_error(line))
   else if Str.string_match regexp_promote line 0 then
     let split = String.split (Str.replace_first regexp_promote_ "" line) ' ' in
@@ -161,7 +161,7 @@ let handle c = match c with
   |Message(m) -> begin match find_room_by_id !rooms m.room_id with
       |None -> report "message received for unknown room."
       |Some(r) -> rooms := update_room_by_id !rooms {r with history = add_message r.history m};
-        print_message m
+        if m.user_id = !id then print_message m else ()
     end
   |Enter(room_id, user_id) -> begin if user_id = !id then () (* handled by Room(...), which is send by the server *)
       else
