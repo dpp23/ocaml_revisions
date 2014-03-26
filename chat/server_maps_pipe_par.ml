@@ -171,7 +171,7 @@ let merger a _ c = print_string "Merging... \n"; print_string(Sexp.to_string_hum
   |Message (m) -> begin match find_room_by_id a.rooms m.room_id with
       |None -> raise (Horror("Room not found at merging point in the global state!"))
       |Some(room) -> print_string ("Sending message: " ^ m.text ^ " to " ^ (string_of_int m.room_id));
-        send_to_user_list room.users (Message(m));
+        send_to_user_list room.users (Message({m with timestamp = Time.now()}));
         {a with rooms = update_room_by_id a.rooms {room with history = add_message room.history m}}
     end
   |Promote (ad,u,g) -> begin match find_room_by_id a.rooms g with

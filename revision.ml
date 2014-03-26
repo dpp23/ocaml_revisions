@@ -13,17 +13,24 @@ end
 
 module type Revision = sig
   type i
+  type result
   type t
   type isolated
   type value
-  type result
 
-  val get_revision: result -> t
-  val get_isolated: result -> isolated 
+  val init: unit -> t
+  (** Adds a new isolated with [value] and returns a new result **)
   val create:  t -> value -> result
+  
+  (** For breaking the result into revision and isolated **)
+  val get_revision: result -> t
+  val get_isolated: result -> isolated
+  
+  (** Scheduling primitives **)
   val fork: t -> (t -> t Deferred.t) -> t Deferred.t
   val join: t -> t -> t
-  val init: unit -> t
+  
+  (** Isolated access **)
   val write: t -> isolated -> value -> t
   val read: t -> isolated -> value Deferred.t
   val determine_revision: t -> t
