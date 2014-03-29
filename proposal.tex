@@ -1,0 +1,189 @@
+%%%%%%%%% Suggested by JMB %%%%%%%%%%%%
+
+
+\newcommand{\al}{$<$}
+\newcommand{\ar}{$>$}
+
+\parindent 0pt
+\parskip 6pt
+
+\begin{document}
+
+\thispagestyle{empty}
+
+\rightline{\large{Dimitar Popov}}
+\medskip
+\rightline{\large{Homerton College}}
+\medskip
+\rightline{\large{CRSID: DPP23}}
+
+\vfil
+
+\centerline{\large CST Part II Personal Project Proposal}
+\vspace{0.4in}
+\centerline{\Large\bf Concurrent Revisions Library for OCaml}
+\vspace{0.3in}
+\centerline{\large {12/10/2013}}
+
+\vfil
+
+{\bf Project Originator:} Dr Anil Madhavapeddy
+
+\vspace{0.1in}
+
+{\bf Resources Required:} See attached Project Resource Form
+
+\vspace{0.5in}
+
+{\bf Project Supervisor:} Dr Anil Madhavapeddy
+
+\vspace{0.2in}
+
+{\bf Signature:}
+
+\vspace{0.5in}
+
+{\bf Director of Studies:} Dr Bogdan Roman
+
+\vspace{0.2in}
+
+{\bf Signature:}
+
+\vspace{0.5in}
+
+{\bf Overseers:} Dr Richard Gibbens and Prof Larry.Paulson
+
+\vspace{0.2in}
+
+{\bf Signatures:} 
+
+\vfil
+\eject
+
+\section*{Introduction and Description of the Work}
+
+Concurrency is essential for almost all modern applications. Ensuring good responsiveness and exploiting hardware parallelism is vital but often makes applications difficult to test, maintain and reason about. This usually involves data sharing between different tasks and complicated locking schemes to ensure that the shared data is never corrupted. However  this ofter limits parallelism and could be the root of a number of terrifying and hard to find bugs.
+
+An alternative approach to parallel programming is described in the paper referenced bellow[1]. In this framework the main unit of concurrency are asynchronous tasks called revisions. They are completely isolated using replication and can be forked and joined much like typical asynchronous tasks. The programmer declares what data is shared between revisions using different isolation types. Merge conflicts are resolved deterministically which simplifies the reasoning behind the run-time execution. 
+
+\section*{Resources Required}
+
+The project will be undertaken on my personal laptop (which can be easily replaced in case of failure in less than 5 working days). Naturally the main programming language for the project will be OCaml and will take advantage of the Core and Async libraries for OCaml. Git will be used for source and revision control and Github for backup.
+
+\section*{Starting Point}
+
+As part of my course I have gained a fair understanding of concurrent programming and the main issues it faces. The concept of Concurrent revisions was unfamiliar to me prior to reading the paper, but is simplistic enough to be understood fairly quickly. I have a limited experience with OCaml and some of its core features are new to me. To address this I plan to dedicate the first phase of the project to gaining deeper knowledge of the programming language and what the Core and Async libraries could offer.
+
+\section*{Substance and Structure of the Project}
+
+The aim of the project is implementing an OCaml library for Concurrent revisions. The library must provide the main facilities for parallel programming discussed in the paper - revisions, isolation types, deterministic conflict resolution. An important part of the project should be dedicated to testing the correctness of the behaviour of the library and investigation of its performance. The latter should be done by a number of use cases that would allow comparison with the result obtained by the authors of the paper with their C\# implementation.
+
+
+The project has the following main sections:
+
+\begin{enumerate}
+
+\item Familiarization with the OCaml programming language and the Core library. Design of the data structures to be used inside the library and the interface that would be exposed to the programmer. Both would most probably be influenced by the original implementation, though given the huge difference between C\# and OCaml, this would not be a trivial task and would require careful consideration in order to produce a clear OCaml version of the concept which is not awkward to use.
+
+\item Developing the implementation of the library. Producing some relatively simple automated tests which would help finding bugs promptly during the development process.
+
+\item Evaluation of the library: Developing a few use cases that would be used to measure the performance of the library. Both a single-threaded and a parallel version (using revisions) should be developed in order to be able to measure memory and CPU overhead. One of these use cases would be a simple char server. Other use cases that explore unpredictable I/O and extensive data sharing should be designed at this stage. Given the limitations of OCaml for exploring hardware parallelism, the versions using Concurrent Revisions are not expected to outperform the sequential versions of the use cases.
+
+\item Optional stage: If time permits, optimization of the library. This stage would became critical if the performance is unsatisfactory.
+
+\item Writing the Dissertation.
+
+\end{enumerate}
+
+
+\section*{Success Criteria}
+
+The following should be achieved:
+
+\begin{itemize}
+
+\item Implement the library
+
+\item Design the automated tests and pass them
+
+\item Design the use cases for evaluation
+
+\item Measure the performance of the implementation and confirm it is close to the original implementation.
+
+\end{itemize}
+
+
+\section*{Timetable and Milestones}
+
+\subsection*{Weeks 1 to 3 (28th October - 10th November)}
+
+Familiarize with the OCaml programming language in greater depth (specifically the primitives the language provides for concurrency, the module system and the OOP features of the language.) 
+
+Milestones: Gain good understanding of the mentioned OCaml features as a prerequisite for the further part of the project. 
+
+
+\subsection*{Weeks 4 to 5 (11th November - 24th November)}
+
+Produce a high level design of the implementation and the interface that will be exposed outside the library. Discussion with supervisor about the suitability of the design and its weak points.
+
+Milestones: Formal design of the library
+
+\subsection*{Week 6 to 9 (25th November - 22nd December)}
+
+Begin implementation of the library. Design automated tests to be used for monitoring the correctness of the implementation.
+
+Milestones: First prototype that should pass the automated tests.
+
+\subsection*{Weeks 10 to 13 (6th January - 9th February)}
+
+Continue the development of the library and implement all of the features, expand the tests if necessary. Attempt trivial optimizations.
+
+Milestones: Second prototype of the library, which potentially, apart of bug fixes and future optimizations, should be deliverable. Progress report submission  
+
+\subsection*{Weeks 14 to 17 (10th February - 9th March)}
+
+Design and implement the use cases required for evaluation. At least two use cases should be produced - both with simple sequential version and one that makes use of the Concurrent Revisions library 
+
+Milestones: Working versions of the use cases.
+
+
+\subsection*{Weeks 18 to 19 (10th March - 23th March)}
+
+Evaluation and testing. Measure and analyze the performance of the use cases. Determine whether there is need for optimization (discuss with supervisor).
+
+Milestone: Analysis of the performance of the implementation. List of known bugs.
+
+
+\subsection*{Weeks 20 to 22 (24th March - 13th April)}
+
+Depending on the evaluation and testing results, balance workload between bug fixes and optimization of the project and exam preparation
+
+Milestones: Confirm any known bugs are fixed and performance is satisfactory.
+
+
+\subsection*{Weeks 23 to 26 (14th April - 11th May}
+
+At this stage the work on the project should hopefully be complete. Write the Dissertation and do one final review of the whole project.
+
+Milestones: Submit Dissertation
+
+
+
+\section*{Reference}
+\begin{description}
+\item{[1]} \emph{Concurrent Programming with Revisions and Isolation Types}, Sebastian Burckhardt, Alexandro Baldassion, and Daan Leijen. OOPSLA'10
+
+\end{description}
+
+\newpage
+
+\section*{Project Resource Form}
+No special resources are required. I plan on using my personal laptop (dual-core i5, 4GB RAM). In case of hardware failure I have a spare machine with similar specification. I accept full responsibility for this machine and I have made contingency plans to protect myself against hardware and/or software failure.
+
+For source control I am going to use Git and for backup - Github.
+
+I plan on using the Core and Async libraries for OCaml extensively, both of which are publicly available.
+
+
+\end{document}
+
