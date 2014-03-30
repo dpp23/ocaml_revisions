@@ -1,7 +1,7 @@
 #!/bin/bash
 
 clients_fix=10
-mes_fix=100
+mes_fix=1000
 
 clients_dyn=100
 mes_dyn=1000

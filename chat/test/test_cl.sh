@@ -38,8 +38,8 @@ while true; do
 done
 
 #kill clients
-killall client.native
-killall $SERVER
+#killall client.native
+#killall $SERVER
 
 touch $FOLDER/$TEST.txt
 for (( i=0; i < $USERS; i++ ))
