@@ -127,7 +127,7 @@ Name:               & \bf Dimitar Popov                     \\
 College:            & \bf Homerton College                     \\
 Project Title:      & \bf Concurrent revisions library for OCaml \\
 Examination:        & \bf Computer Science Tripos Part II, July 2014        \\
-Word Count:         & \bf 11993\footnotemark[1]
+Word Count:         & \bf 11998\footnotemark[1]
 \\
 Project Originator: & Dr Anil Madhavapeddy                    \\
 Supervisor:         & Dr Anil Madhavapeddy                    \\ 
@@ -146,7 +146,7 @@ To design and build a library for OCaml that implements the concept of Concurren
 
 \section*{Work Completed}
 
-Designed, implemented and tested a Concurrent revisions library in OCaml. Provided some example code and two use cases - logging server and chat server. The latter was used in performance tests of the implementation.
+Designed, implemented and tested a Concurrent revisions library in OCaml. Provided some example code and two use cases - a logging server and chat server. The latter was used in performance tests of the implementation.
 The use cases were also the basis of the quantitative evaluation of the implementation. The implementation was also evaluated in terms of usability and compared to the previous implementations.
 
 \section*{Special Difficulties}
@@ -230,7 +230,7 @@ Much like transactional systems, Concurrent revisions use replication to ensure 
 
 In the concept of concurrent revisions the guarantee of parallel executions being equivalent to some sequential schedule is relaxed. Instead, given the right abstractions, the programmer can reason about the execution directly making the design of a concurrent system more natural. This increases parallelism and leaves to the programmer only two things to worry about - what has to be shared and how conflicts have to be resolved, concentrating any possible bugs in a limited region.
 
-This approach is data centric in a sense that it takes the complexity of synchronization, in terms of programmer's effort, out of the tasks and adds it to the data declarations. The runtime complexity of synchronization is shifted from blocking or checking that the schedule of tasks was legal into the join of tasks where conflicts are resolved by a deterministic computation.   
+This approach is data centric in the sense that it takes the complexity of synchronization, in terms of programmer's effort, out of the tasks and adds it to the data declarations. The runtime complexity of synchronization is shifted from blocking or checking that the schedule of tasks was legal into the join of tasks where conflicts are resolved by a deterministic computation.   
 
 \subsection{Applicable areas}
 Every system that is subject to a lot of conflicts typically has to limit the parallelism of its execution in order to ensure consistency and avoid conflicts. Concurrent revisions take the different approach of resolving conflicts instead of avoiding them by scheduling. This makes them suitable for problems where there are a lot of write-write conflicts which should be resolved deterministically and performance can be increased greatly by more parallelism. Some examples of applications that could benefit from concurrent revisions are: 
@@ -242,7 +242,7 @@ Every system that is subject to a lot of conflicts typically has to limit the pa
 {\bfseries Bank transactional systems} - Such systems have a lot of constraints on invariants that form write- and read-skews. We will see later how this can nicely be resolved if using concurrent revisions (see \ref{rev_data_struct} and \ref{rev_in_ocaml}). 
 
 \item
-{\bfseries Games} - They are a natural example when high parallelism is crucial for adequate performance. However, the fact that there are a lot of conflicts-user input, graphics rendering, simulating physics, game logic, write-backs to disk, makes getting their parallelization right tricky. Now what if we execute each of these tasks in a separate revision and then join them as appropriate. There is one more concern of course - we have to be able to resolve conflicts. Luckily in order to do so, we simple have to define a merge function, which bundles all the complexity of dealing with conflicts into a single place, making it much more maintainable. Getting the merge function right is crucial, as we do not want our player to dash into a wall that was not displayed on the screen yet.
+{\bfseries Games} - They are a natural example when high parallelism is crucial for adequate performance. However, the fact that there are a lot of conflicts-user input, graphics rendering, simulating physics, game logic, write-backs to disk, makes getting their parallelization right tricky. Now what if we execute each of these tasks in a separate revision and then join them as appropriate. There is one more concern of course - we have to be able to resolve conflicts. Luckily in order to do so, we simply have to define a merge function, which bundles all the complexity of dealing with conflicts into a single place, making it much more maintainable. Getting the merge function right is crucial, as we do not want our player to dash into a wall that was not displayed on the screen yet.
 
 \item
 {\bfseries Logging \& Chat systems} - The usage of functional languages is increasing in large commercial distributed systems such as logging and chat systems. One example of that is the Facebook chat, which is written in Erlang \cite{erlang}. Such systems often have a lot of conflicts, timing and consistency are vital and they more or less require deterministic behaviour. This matches the list of requirements for suitability of concurrent revisions and we will see later (chapters \ref{logging} \& \ref{chat_server}) that it is indeed convenient to write such systems using them. 
@@ -440,7 +440,7 @@ Here in line 1 we schedule a deferred computation that reads the context of a fi
 
 \subsection{Additional reference}
 For more detailed overview of OCaml please see {\bf Real World OCaml -  Jason Hickey, Anil Madhavapeddy, and Yaron Minsky; O'Reilly 2013} \cite{realocaml}, which provides an excellent and very approachable introduction to OCaml.
-
+\vspace{12pt}
 \section{Overview of the concept}
 
 
@@ -618,7 +618,7 @@ In the example on the right, we are interleaving two separate flows of revisions
 As part of my degree I have gained broad knowledge of the problems that arise from concurrency and the typical approaches for solving them. The Concurrent and Distributed Systems course gave me most insight into why and how Concurrent revisions can be used for parallel programming. After reading the original paper, the concept naturally fit in and expanded the mental model I have created about the issues and solutions in the world of Concurrency.  
 
 \section{Familiarizing with the OCaml programming language}
-Prior to starting the project, I had almost no experience with the OCaml programming language. For that reason I dedicated the first part of my project to making myself familiar with it. I used the Real World OCaml book \cite{realocaml} to guide me through the concepts and patterns for the language. I was able to quickly transfer and expand my skills in ML into OCaml without much difficulty.
+Prior to starting the project, I had almost no experience with the OCaml programming language. For that reason I dedicated the first part of my project to making myself familiar with it. I used the Real World OCaml book \cite{realocaml} to guide me through the concepts and patterns for the language. I was able to quickly transfer and expand my skills in ML into OCaml with average degree of difficulty.
 
 \section{The Core and Async libraries}
 I made extensive use of the Core and Async libraries for OCaml. The latter was used in the core of the implementation and the use cases. The {\tt Revision} module (\ref{implementation}) conforms to the pattern of deferred computations in the Async library. This naturally happened in the development process, since the core concepts in the Async library and those of the project complement each other. The revision and isolated data types are completely isolated, making it trivial to implement them as deferred data types and the forks and the joins as deferred computations.  
@@ -894,7 +894,7 @@ The functional nature that I was aiming for required creating a new revision aft
 \label{complexity}
 Forking a new revision does not require additional space as the revision structure of the parent is not changed and the forked revision merely points to it. The functional nature of the implementation guarantees that the parent would never be mutated, making this way of replication completely safe. Inside the fork, the only operation that requires extra space is {\tt Revision.write}. It has to change the value of an isolated in a revision. Under the hood this is implemented as a value update in a map. This takes just O(log n) time, where n is the number of isolated in that revision and just constant space due to the immutable nature of Core maps and the re-usage of their internal structure. 
 
-In similar fashion to forks, joins also create a new revision, heavily reusing the map from the revision to which we are joining. For every variable changed in the joinee, three values have to be read - from the head revision, the parent revision and the current revision. This takes logarithmic time in terms of the number of isolated variables. Then for each written variable, the merge function is called and the result of it is applied to the head revision, creating a new one. This takes time O(k*log n*merge), where merge is the runtime complexity of the merge function, k is the number of variables changed in the joinee and n is the total number of variables in the revision. The join performs k updates to values in the map, which means it has space complexity of O(k + merge), where merge is the space complexity of the merge function. 
+In similar fashion to forks, joins also create a new revision, heavily reusing the map from the revision to which we are joining. For every variable changed in the joinee, three values have to be read - from the head revision, the parent revision and the current revision. This takes logarithmic time in terms of the number of isolated variables. Then for each written variable, the merge function is called and the result of it is applied to the head revision, creating a new revision. This takes time O(k*log n*merge), where merge is the runtime complexity of the merge function, k is the number of variables changed in the joinee and n is the total number of variables in the revision. The join performs k updates to values in the map, which means it has space complexity of O(k + merge), where merge is the space complexity of the merge function. 
 
 Everything allocated in the merge function is garbage collected after it is executed, which means it does not add extra space complexity to the total runtime. Revisions created by the forks and join would also be garbage collected once they are out of scope, which means space usually is used only for forks not yet joined and the head revisions. We will see how this works in practice with the use cases later on (see \ref{logging} and \ref{chat_server}). 
 
@@ -910,7 +910,7 @@ There are two classes of runtime errors that the implementation has to deal with
  
 The first one is concerned with illegal usage of revisions. When a read or write of an isolated from a revision is executed, there is still no guarantee that the revision contains a value for this particular isolated, even when their compatibility was successfully type-checked. In that case, an exception {\tt Isolated\_Not\_Found} is raised. When the run-time discovers an illegal join (note that not all of these are caught, see {\ref{problems}), it raises an {\tt Incompatible\_join} exception.
 
-The second class of runtime errors are those occurring in the user declared code to be executed inside the revisions framework - namely the merge function and the functions executed inside forks. For the former the exceptions are left uncaught, since merely abandoning joins would result in a silent failure, which would be difficult to debug. As for the latter - the exception is caught inside the fork and only re-raised if the fork is joined. Since results of forks are only applied to the state after the join it is consistent with the concept to treat exceptions as any other state changes.  
+The second class of runtime errors are those occurring in the code declared by the user to be executed inside the revisions framework - namely the merge function and the functions executed inside forks. For the former the exceptions are left uncaught, since merely abandoning joins would result in a silent failure, which would be difficult to debug. As for the latter - the exception is caught inside the fork and only re-raised if the fork is joined. Since results of forks are only applied to the state after the join it is consistent with the concept to treat exceptions as any other state changes.  
  
 \section{Unit tests \& example code}
  A number of unit test were designed which cover all possible legal revision diagrams and a different number of isolated variables. They were used in parallel with the ongoing work on the implementation to ensure its correctness. 
@@ -970,7 +970,7 @@ After arming myself with a concurrent revision module that allows forking and jo
 \subsubsection{Runtime flow}
 Each user that wants to communicate with the server opens a TCP connection with it. Then the server and the clients exchange commands that are predefined and are shared between them as communication protocol. They are passed around serialized as s-expressions. S-expressions are an efficient serialization technique, based on well bracketed expressions. A simple example of a s-expression would be {\tt (this (is an) (s expression))}. 
 
-The design of the server is based on a two-stage producer-consumer solution. The clients produce events, which are consumed by asynchronous concurrent forked revisions. Once evaluated these revisions are consumed by a second stage which joins them to the global state. 
+The design of the server is based on a two-stage producer-consumer solution \cite{bacon}. The clients produce events, which are consumed by asynchronous concurrent forked revisions. Once evaluated these revisions are consumed by a second stage which joins them to the global state. 
 
 All the connections are served in parallel and messages are added to a pipe as they arrive without blocking. A recursive function takes messages out of this pipe and forks a new revision corresponding to each message. The forked revisions are just scheduled for evaluation without blocking the function that takes messages out of the pipe, which means that at any given time there can be arbitrary many fully parallelized forks. 
 
